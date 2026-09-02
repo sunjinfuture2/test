@@ -11,8 +11,38 @@ import * as THREE from 'three'
 export const CX = 72
 export const CZ = 56
 
+/* ══ 층고 배율 ══════════════════════════════════════════════
+   도면 좌표(buildFacility)는 그대로 두고 헬퍼가 높이만 매핑한다.
+   층 피치 13.5m → 20.25m. 장비 치수는 건드리지 않고 천장까지의
+   여유고만 늘어나 층이 트여 보인다. */
+export const FLOOR_SCALE = 1.5
+
+const SRC_LV = [0, 13.5, 27, 40.5]   // 원본 레벨 (B1 · 1F · 2F · 옥상)
+const SRC_PITCH = 13.5
+export const PITCH = SRC_PITCH * FLOOR_SCALE
+/** 매핑 후 레벨 높이 [B1, 1F, 2F, 옥상] */
+export const LEVELS = SRC_LV.map((_, i) => i * PITCH)
+
+/* 장비대(층 바닥 ~ KNEE)는 원래 높이 그대로 두고, 그 위 여유고가
+   늘어난 층고를 흡수한다. 실제 장비·배관은 모두 KNEE 아래에 있어
+   결과적으로 치수는 유지되고 천장만 올라간다. */
+const KNEE = 10.5
+const HEAD_K = (PITCH - KNEE) / (SRC_PITCH - KNEE)
+
+/** 장비 높이 매핑 */
+export function MZ(z) {
+  let i = 0
+  while (i < SRC_LV.length - 1 && z >= SRC_LV[i + 1]) i++
+  const rel = z - SRC_LV[i]
+  if (rel <= KNEE) return LEVELS[i] + rel
+  return LEVELS[i] + KNEE + (rel - KNEE) * HEAD_K
+}
+
+/** 구조체(벽·슬래브) 높이 매핑 — 층 피치와 정확히 함께 늘어난다 */
+export function MZS(z) { return z * FLOOR_SCALE }
+
 export function V(x, y, z) {
-  return new THREE.Vector3(x - CX, z, y - CZ)
+  return new THREE.Vector3(x - CX, MZ(z), y - CZ)
 }
 
 /* ── 레지스트리 ─────────────────────────────────────────── */
@@ -25,6 +55,7 @@ export const ctx = {
   floorMeshes: { b1: [], f1: [], f2: [], roof: [] }, // 층별 mesh (층 필터용)
   slabs: [],         // { m, e, top, zTop, floor } 상부 슬래브 (선택 시 페이드)
   currentFloor: null,
+  floorTerms: null,  // 층 → 그 층에 배치된 용어 id 목록 (빌드 후 채워짐)
 }
 
 export function resetCtx(scene) {
@@ -36,6 +67,7 @@ export function resetCtx(scene) {
   ctx.floorMeshes = { b1: [], f1: [], f2: [], roof: [] }
   ctx.slabs = []
   ctx.currentFloor = null
+  ctx.floorTerms = null
 }
 
 export function setFloor(floor) {
@@ -94,9 +126,10 @@ export function addEdges(g, geo, mesh, hex) {
 
 export function box(g, x, y, z, w, d, h, hex, opt) {
   opt = opt || {}
-  const geo = new THREE.BoxGeometry(w, h, d)
+  const Z0 = MZ(z), H = Math.max(MZ(z + h) - Z0, 1e-4)
+  const geo = new THREE.BoxGeometry(w, H, d)
   const m = new THREE.Mesh(geo, lam(hex, opt.op))
-  m.position.set(x + w / 2 - CX, z + h / 2, y + d / 2 - CZ)
+  m.position.set(x + w / 2 - CX, Z0 + H / 2, y + d / 2 - CZ)
   if (opt.ry) m.rotation.y = opt.ry
   g.add(m)
   ctx.pickables.push(m)
@@ -113,7 +146,7 @@ export function topSurface(g, x, y, z, w, d, hex, op) {
   mat.userData = { baseOp: op === undefined ? 1 : op }
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat)
   m.rotation.x = -Math.PI / 2
-  m.position.set(x + w / 2 - CX, z, y + d / 2 - CZ)
+  m.position.set(x + w / 2 - CX, MZ(z), y + d / 2 - CZ)
   m.userData.floorTop = true
   g.add(m)
   registerFloor(m)
@@ -132,7 +165,7 @@ export function gradientGroundSurface(g, x, y, z, w, d, hex) {
   mat.userData = { baseOp: 1 }
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat)
   m.rotation.x = -Math.PI / 2
-  m.position.set(x + w / 2 - CX, z, y + d / 2 - CZ)
+  m.position.set(x + w / 2 - CX, MZ(z), y + d / 2 - CZ)
   m.renderOrder = -10
   m.userData.floorTop = true
   m.userData.groundSurface = true
@@ -176,9 +209,10 @@ export function applySiteEdgeFade(mesh, hx, hy, fade) {
 
 export function cylY(g, x, y, z, r, h, hex, opt) {
   opt = opt || {}
-  const geo = new THREE.CylinderGeometry(opt.rTop !== undefined ? opt.rTop : r, r, h, opt.seg || 18)
+  const Z0 = MZ(z), H = Math.max(MZ(z + h) - Z0, 1e-4)
+  const geo = new THREE.CylinderGeometry(opt.rTop !== undefined ? opt.rTop : r, r, H, opt.seg || 18)
   const m = new THREE.Mesh(geo, lam(hex, opt.op))
-  m.position.set(x - CX, z + h / 2, y - CZ)
+  m.position.set(x - CX, Z0 + H / 2, y - CZ)
   g.add(m)
   ctx.pickables.push(m)
   registerFloor(m)
@@ -355,13 +389,14 @@ export function ladder(g, x, y, z, h, hex) {
 export function wall(x, y, z, w, d, h, nx, nz, interior, hexOverride) {
   const g = G(null, null)
   const hex = hexOverride || '#FAFBFD'
-  const geo = new THREE.BoxGeometry(w, h, d)
+  const Z0 = MZS(z), H = h * FLOOR_SCALE
+  const geo = new THREE.BoxGeometry(w, H, d)
   const m = new THREE.Mesh(geo, lam(hex, interior ? 0.45 : 0.95))
   /* 벽 밝기 +50% — 램버트 음영으로 어두워지는 수직면을 에미시브로 들어올림
      (모서리 라인 컬러는 아래 edgeColor 그대로) */
   if (!hexOverride) m.material.emissive = new THREE.Color('#9a9ca0')
   m.material.depthWrite = !interior
-  m.position.set(x + w / 2 - CX, z + h / 2, y + d / 2 - CZ)
+  m.position.set(x + w / 2 - CX, Z0 + H / 2, y + d / 2 - CZ)
   g.add(m)
   registerFloor(m)
   const edgeColor = interior ? '#DEE2E5' : '#C5CBD0'
@@ -387,17 +422,18 @@ export function wall(x, y, z, w, d, h, nx, nz, interior, hexOverride) {
 export function slab(x, y, z, w, d, th, floorId, hexBody, hexTop, baseOp) {
   const op = baseOp === undefined ? 0.55 : baseOp
   const g = G(null, null)
-  const geo = new THREE.BoxGeometry(w, th, d)
+  const Z = MZS(z), TH = th * FLOOR_SCALE
+  const geo = new THREE.BoxGeometry(w, TH, d)
   /* 슬래브 측면 밴드 밝기 +50% (#D3D8DC → 흰색 방향 50% 블렌드) */
   const m = new THREE.Mesh(geo, lam(hexBody || '#E9EBED', op))
   m.material.depthWrite = false
-  m.position.set(x + w / 2 - CX, z - th / 2, y + d / 2 - CZ)
+  m.position.set(x + w / 2 - CX, Z - TH / 2, y + d / 2 - CZ)
   g.add(m)
   registerFloor(m)
   const e = addEdges(g, geo, m, '#969EA6')
   e.userData.structure = true // 층 고스트: 건물 구조 라인만 유지
   const top = topSurface(g, x, y, z + 0.03, w, d, hexTop || '#E8EAEC', Math.min(0.6, op))
-  ctx.slabs.push({ m, e, top, zTop: z, floor: floorId, baseOp: op })
+  ctx.slabs.push({ m, e, top, zTop: Z, floor: floorId, baseOp: op })
   return m
 }
 

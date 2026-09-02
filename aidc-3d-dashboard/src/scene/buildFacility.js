@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import {
   ctx, resetCtx, setFloor, tagFloor, G, V, lam, box, cylY, cylDir, pipe, wall, slab,
   topSurface, gradientGroundSurface, applySiteEdgeFade, fanTop, fanFront, ladder, addEdges, P, CX, CZ,
+  MZS,
 } from './helpers.js'
 
 /**
@@ -11,7 +12,10 @@ import {
  *   전산동: x 0~105.3 (그리드 1~15), y 0~38.6 (그리드 N~H, 북→남)
  *   공급동: x 4.2~63.9 (그리드 1~9), y 54~104 (전산동 남측)
  *   사이 마당(주차 밴드): y 38.6~54 — 지반(GL) 높이, 공동구가 지하로 관통
- *   레벨:   B1 바닥 z=0 · 1F(GL) z=9 · 2F z=18 · 옥상 z=27
+ *   레벨:   B1 바닥 z=0 · 1F(GL) z=13.5 · 2F z=27 · 옥상 z=40.5
+ *
+ * 아래 좌표는 모두 도면 원본 값이다. 층고 배율은 helpers.js의
+ * FLOOR_SCALE과 높이 매핑(MZ·MZS)이 적용한다.
  *
  * 도면 디테일 반영:
  *   공동구(전산동↔공급동 + 동측 스텁), GIS 상부 오픈, 옥외유류탱크(B1 피트
@@ -23,7 +27,6 @@ import {
 
 const MAIN = { x0: 0, x1: 105.3, y0: 0, y1: 38.6 }   // 전산동
 const SUP = { x0: 4.2, x1: 63.9, y0: 54, y1: 104 }    // 공급동
-/* 층고 1.5배 (피치 9m → 13.5m) */
 const LV = { b1: 0, f1: 13.5, f2: 27, roof: 40.5 }
 const WH = 8.7   // 장비 기준 높이 (덕트·팬월 등 배치 좌표에만 사용)
 const XWH = 12.5 // 벽 높이 — 층 피치 13.5 − 슬래브 두께 1: 벽 상단이 천장 슬래브에 밀착
@@ -40,8 +43,32 @@ export function buildFacility(scene) {
   buildDetailPlus()
   buildGhostShells()
   buildFlows()
+  ctx.floorTerms = collectFloorTerms()
 
   return ctx
+}
+
+/**
+ * 층별로 실제 배치된 용어 id 목록 — 사이드바 층 필터용.
+ *
+ * 라벨 앵커는 용어당 하나뿐이라 여러 층에 걸친 설비(수배전반·축전지실 등)를
+ * 한 층으로만 잡는다. 그래서 빌드된 씬에서 용어 그룹의 메시가 어느 층에
+ * 태깅됐는지를 직접 훑어 층 소속을 만든다.
+ */
+function collectFloorTerms() {
+  const byFloor = { b1: [], f1: [], f2: [], roof: [] }
+  for (const term in ctx.groupReg) {
+    const seen = {}
+    ctx.groupReg[term].traverse((o) => {
+      // 흐름 패킷은 배관과 같은 층에 태깅되므로 중복 순회만 늘린다 → 건너뜀
+      if (!o.isMesh || o.userData.flowParticle) return
+      const f = o.userData.floor
+      if (!f || !byFloor[f] || seen[f]) return
+      seen[f] = true
+      byFloor[f].push(term)
+    })
+  }
+  return byFloor
 }
 
 /* ═══ 층 아이솔레이션 고스트 쉘 — 타 층은 건물 외곽 실루엣 라인만 표시 ═══
@@ -52,7 +79,7 @@ function buildGhostShells() {
   const g = G(null, null)
   const bands = { b1: [0, 13.5], f1: [13.5, 27], f2: [27, 40.5], roof: [40.5, 41.7] }
   for (const f in bands) {
-    const z0 = bands[f][0], z1 = bands[f][1]
+    const z0 = MZS(bands[f][0]), z1 = MZS(bands[f][1])
     for (const r of [MAIN, SUP]) {
       const geo = new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, r.y1 - r.y0)
       const ls = new THREE.LineSegments(
@@ -77,7 +104,7 @@ function buildGhostShells() {
   )
   gnd.material.userData = { baseOp: 0.15 }
   gnd.rotation.x = -Math.PI / 2
-  gnd.position.set(EXT.x0 + EXT.w / 2 - CX, GL + 0.05, EXT.y0 + EXT.d / 2 - CZ)
+  gnd.position.set(EXT.x0 + EXT.w / 2 - CX, MZS(GL) + 0.05, EXT.y0 + EXT.d / 2 - CZ)
   gnd.renderOrder = 60
   gnd.userData.ghostShell = true
   gnd.userData.shellFloor = 'ground'
