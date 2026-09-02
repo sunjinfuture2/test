@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { buildFacility, LABELS } from '../scene/buildFacility.js'
 import { ctx } from '../scene/helpers.js'
-import { CX, CZ } from '../scene/helpers.js'
+import { CX, CZ, MZ } from '../scene/helpers.js'
 import { TERMS, CATS } from '../data/terms.js'
 import { useAppStore } from '../store/useAppStore.js'
 
@@ -21,9 +21,10 @@ import { useAppStore } from '../store/useAppStore.js'
 
 function V(x, y, z) { return new THREE.Vector3(x - CX, z, y - CZ) }
 
-const FLOOR_OF_Z = (z) => (z < 12 ? 'b1' : z < 25.5 ? 'f1' : z < 39 ? 'f2' : 'roof')
-/* 층별 z-대역 (도면 좌표) — 흐름 배관/도트의 층 아이솔레이션 판정용 */
-const FLOOR_BANDS = { b1: [-99, 12], f1: [12, 25.5], f2: [25.5, 39], roof: [39, 999] }
+/* 층 판정 임계값 — 매핑 후 좌표(층 피치 20.25m) 기준 */
+const FLOOR_OF_Z = (z) => (z < 18 ? 'b1' : z < 38.25 ? 'f1' : z < 58.5 ? 'f2' : 'roof')
+/* 층별 z-대역 (매핑 후 좌표) — 흐름 배관/도트의 층 아이솔레이션 판정용 */
+const FLOOR_BANDS = { b1: [-99, 18], f1: [18, 38.25], f2: [38.25, 58.5], roof: [58.5, 999] }
 
 export default function Viewport() {
   const hostRef = useRef(null)
@@ -46,13 +47,13 @@ export default function Viewport() {
     renderer.setClearColor(0xffffff, 1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     const scene = new THREE.Scene()
-    // 시인성 확장: 수평 1.8배(면적 3.24배) · 수직 2.2배(층고 피치 13.5→29.7m)
+    // 시인성 확장: 수평 1.8배(면적 3.24배) · 수직 2.2배(층고 피치 20.25→44.6m)
     // 도면 좌표계는 그대로 두고 씬 루트 그룹을 비등방 스케일한다
     const FS = new THREE.Vector3(1.8, 2.2, 1.8)
     const camera = new THREE.PerspectiveCamera(33, 1, 1, 8000)
-    const target = new THREE.Vector3(-40, 14, -11)
-    const sph = { az: -0.62, pol: 1.02, dist: 630 }
-    const HOME = { az: -0.62, pol: 1.02, dist: 630, tx: -40, ty: 22, tz: -11 }
+    const target = new THREE.Vector3(-40, 21, -11)
+    const sph = { az: -0.62, pol: 1.02, dist: 700 }
+    const HOME = { az: -0.62, pol: 1.02, dist: 700, tx: -40, ty: 33, tz: -11 }
 
     function updateCam() {
       const sp = Math.sin(sph.pol), cp = Math.cos(sph.pol)
@@ -97,7 +98,7 @@ export default function Viewport() {
     for (let i = 0; i < LABELS.length; i++) {
       const id = LABELS[i][0]
       const t = TERMS[id]
-      anchorZ[id] = LABELS[i][1][2]
+      anchorZ[id] = MZ(LABELS[i][1][2])
       const div = document.createElement('div')
       div.className = 'lbl'
       div.setAttribute('data-label-id', id)
@@ -118,9 +119,9 @@ export default function Viewport() {
       dot.setAttribute('stroke', '#929497'); dot.setAttribute('stroke-opacity', '0.88')
       leadersSvg.appendChild(dot)
       labelObjs.push({
-        id, anchor: V(LABELS[i][1][0], LABELS[i][1][1], LABELS[i][1][2]).multiply(FS),
+        id, anchor: V(LABELS[i][1][0], LABELS[i][1][1], MZ(LABELS[i][1][2])).multiply(FS),
         div, line: ln, dot, hidden: false, sx: 0, sy: 0,
-        floor: FLOOR_OF_Z(LABELS[i][1][2]),
+        floor: FLOOR_OF_Z(MZ(LABELS[i][1][2])),
       })
     }
 
@@ -473,41 +474,116 @@ export default function Viewport() {
       lower.pop(); upper.pop()
       return lower.concat(upper)
     }
+    /* ── 선택 장비 리더(검은 선)의 끝점 ──────────────────────────
+       한 용어가 여러 층·여러 실에 흩어져 설치되는 경우(축전지실·수배전반
+       등)가 많다. 그룹 전체를 하나의 볼록껍질로 감싸면 인스턴스 사이의 빈
+       공간까지 껍질에 들어가, 껍질 경계로 잡은 끝점이 아무 장비에도 닿지
+       않는 허공에 놓인다. 그래서
+         1) 라벨 앵커가 가리키는 한 덩어리(인스턴스)만 골라 껍질을 만들고,
+         2) 그렇게 얻은 점이 실제로 그 장비 위에 있는지 레이캐스트로 확인해
+            닿을 때까지 안쪽으로 당긴다.
+       카메라를 돌려 형상이 볼록하지 않게 겹쳐 보일 때도 끝점이 장비 표면을
+       벗어나지 않는다. */
+    const leaderRay = new THREE.Raycaster()
+    const leaderNdc = new THREE.Vector2()
+    const LEADER_LINK = 7   // 이 간격(월드) 안에 붙어 있으면 같은 덩어리로 본다
+
+    function projectToScreen(v, w, h) {
+      const p = v.clone().project(camera)
+      return { x: (p.x * 0.5 + 0.5) * w, y: (-p.y * 0.5 + 0.5) * h }
+    }
+    function screenHitsAny(px, py, w, h, objs) {
+      leaderNdc.set((px / w) * 2 - 1, -(py / h) * 2 + 1)
+      leaderRay.setFromCamera(leaderNdc, camera)
+      return leaderRay.intersectObjects(objs, false).length > 0
+    }
+    /** 라벨 앵커에 가장 가까운 부재를 씨앗으로, 맞닿은 부재만 이어붙인 덩어리 */
+    function leaderCluster(term, anchor) {
+      const g = groupReg[term]
+      if (!g) return null
+      g.updateMatrixWorld(true)
+      const parts = []
+      const bb = new THREE.Box3(), size = new THREE.Vector3()
+      g.traverse((o) => {
+        if (!o.isMesh || !o.geometry || o.userData.selectionOutline || o.userData.flowPart) return
+        if (o.userData.floorTop) return                 // 바닥 존 색면은 장비가 아니다
+        if (!o.visible || o.userData._floorHidden) return // 아이솔레이션에서 숨겨진 부재 제외
+        bb.setFromObject(o)
+        if (bb.isEmpty()) return
+        parts.push({ obj: o, c: bb.getCenter(new THREE.Vector3()), r: bb.getSize(size).length() / 2 })
+      })
+      if (!parts.length) return null
+      let seed = 0
+      let seedD = parts[0].c.distanceTo(anchor)
+      for (let i = 1; i < parts.length; i++) {
+        const d = parts[i].c.distanceTo(anchor)
+        if (d < seedD) { seedD = d; seed = i }
+      }
+      const taken = new Array(parts.length).fill(false)
+      taken[seed] = true
+      const queue = [seed]
+      while (queue.length) {
+        const a = parts[queue.pop()]
+        for (let i = 0; i < parts.length; i++) {
+          if (taken[i]) continue
+          const b = parts[i]
+          if (a.c.distanceTo(b.c) <= a.r + b.r + LEADER_LINK) { taken[i] = true; queue.push(i) }
+        }
+      }
+      const cluster = []
+      for (let i = 0; i < parts.length; i++) if (taken[i]) cluster.push(parts[i])
+      return { cluster, seed: parts[seed] }
+    }
+
     function selectedOutlinePoint(item, toX, toY, w, h) {
       const selected = useAppStore.getState().selected
       if (item.id !== selected || !groupReg[item.id]) return { x: item.sx, y: item.sy }
-      const points = []
-      const g = groupReg[item.id]
-      g.updateMatrixWorld(true)
-      g.traverse((o) => {
-        if (!o.isMesh || !o.geometry || o.userData.selectionOutline || o.userData.flowPart) return
-        if (!o.visible || o.userData._floorHidden) return // 숨겨진 부재는 검은 점 계산에서 제외
+      const picked = leaderCluster(item.id, item.anchor)
+      if (!picked) return { x: item.sx, y: item.sy }
+
+      const points = [], objs = []
+      const corner = new THREE.Vector3()
+      for (let m = 0; m < picked.cluster.length; m++) {
+        const o = picked.cluster[m].obj
+        objs.push(o)
         o.geometry.computeBoundingBox()
         const b = o.geometry.boundingBox
-        if (!b) return
+        if (!b) continue
         const mn = b.min, mx = b.max
         const cs = [[mn.x, mn.y, mn.z], [mx.x, mn.y, mn.z], [mn.x, mx.y, mn.z], [mx.x, mx.y, mn.z], [mn.x, mn.y, mx.z], [mx.x, mn.y, mx.z], [mn.x, mx.y, mx.z], [mx.x, mx.y, mx.z]]
-        for (let k = 0; k < cs.length; k++) {
-          const p = new THREE.Vector3(cs[k][0], cs[k][1], cs[k][2]).applyMatrix4(o.matrixWorld).project(camera)
-          points.push({ x: (p.x * 0.5 + 0.5) * w, y: (-p.y * 0.5 + 0.5) * h })
-        }
-      })
-      const hull = convexHull2D(points)
-      if (hull.length < 3) return { x: item.sx, y: item.sy }
-      let cx3 = 0, cy3 = 0
-      for (let i = 0; i < hull.length; i++) { cx3 += hull[i].x; cy3 += hull[i].y }
-      cx3 /= hull.length; cy3 /= hull.length
-      const rx = toX - cx3, ry = toY - cy3
-      let best = Infinity, hit = null
-      for (let n = 0; n < hull.length; n++) {
-        const a = hull[n], b = hull[(n + 1) % hull.length]
-        const sx = b.x - a.x, sy = b.y - a.y, den = rx * sy - ry * sx
-        if (Math.abs(den) < 0.0001) continue
-        const qx = a.x - cx3, qy = a.y - cy3
-        const t = (qx * sy - qy * sx) / den, u = (qx * ry - qy * rx) / den
-        if (t > 0 && u >= 0 && u <= 1 && t < best) { best = t; hit = { x: cx3 + rx * t, y: cy3 + ry * t } }
+        for (let k = 0; k < cs.length; k++)
+          points.push(projectToScreen(corner.set(cs[k][0], cs[k][1], cs[k][2]).applyMatrix4(o.matrixWorld), w, h))
       }
-      return hit || { x: item.sx, y: item.sy }
+      /* 반드시 장비 위에 있는 기준점 — 씨앗 부재의 중심 */
+      const safe = projectToScreen(picked.seed.c, w, h)
+
+      const hull = convexHull2D(points)
+      let hit = null
+      if (hull.length >= 3) {
+        let cx3 = 0, cy3 = 0
+        for (let i = 0; i < hull.length; i++) { cx3 += hull[i].x; cy3 += hull[i].y }
+        cx3 /= hull.length; cy3 /= hull.length
+        const rx = toX - cx3, ry = toY - cy3
+        let best = Infinity
+        for (let n = 0; n < hull.length; n++) {
+          const a = hull[n], b = hull[(n + 1) % hull.length]
+          const sx = b.x - a.x, sy = b.y - a.y, den = rx * sy - ry * sx
+          if (Math.abs(den) < 0.0001) continue
+          const qx = a.x - cx3, qy = a.y - cy3
+          const t = (qx * sy - qy * sx) / den, u = (qx * ry - qy * rx) / den
+          if (t > 0 && u >= 0 && u <= 1 && t < best) { best = t; hit = { x: cx3 + rx * t, y: cy3 + ry * t } }
+        }
+      }
+      if (!hit) return safe
+      if (screenHitsAny(hit.x, hit.y, w, h, objs)) return hit
+      /* 껍질은 볼록이라 실제 형상 밖으로 나갈 수 있다 → 닿을 때까지 당긴다 */
+      let lo = 0, hi = 1
+      for (let it = 0; it < 12; it++) {
+        const mid = (lo + hi) / 2
+        if (screenHitsAny(safe.x + (hit.x - safe.x) * mid, safe.y + (hit.y - safe.y) * mid, w, h, objs)) lo = mid
+        else hi = mid
+      }
+      return { x: safe.x + (hit.x - safe.x) * lo, y: safe.y + (hit.y - safe.y) * lo }
     }
     let xraySaved = []
     function clearXray() {
@@ -662,7 +738,7 @@ export default function Viewport() {
     function onWheel(e) {
       e.preventDefault()
       camGoal = null
-      const newDist = Math.max(52, Math.min(1100, sph.dist * (e.deltaY > 0 ? 1.1 : 1 / 1.1)))
+      const newDist = Math.max(52, Math.min(1400, sph.dist * (e.deltaY > 0 ? 1.1 : 1 / 1.1)))
       const applied = newDist / sph.dist
       const r = canvas.getBoundingClientRect()
       mv.x = ((e.clientX - r.left) / r.width) * 2 - 1
