@@ -75,9 +75,11 @@ function collectFloorTerms() {
    두께 없는 단일 외곽 박스 와이어프레임(층×동). 평소 숨김, Viewport의
    applyVisibility가 아이솔레이션 시 해당 층 외의 쉘만 켠다.
 
-   depthTest를 끈 검정 선이라 모델 위에 그대로 얹힌다 → 낮은 불투명도에서도
-   존재감이 커서, 선택한 층을 가리지 않을 만큼만 남긴다. */
-const SHELL_OP = 0.05        // 타 층 외곽선
+   depthTest를 끈 검정 선이라 모델 위에 그대로 얹힌다. 흰 배경 위 얇고 긴
+   선은 알파 0.05에서도 또렷하게 읽혀서, 선택한 층 위를 가로지르며 내용을
+   가렸다 → Viewport의 applyVisibility가 타 층 쉘은 켜지 않고 지상면
+   기준선만 표시한다. (쉘을 되살리려면 그쪽 한 줄만 바꾸면 된다) */
+const SHELL_OP = 0.05     // 타 층 외곽선 (현재 미표시)
 const SHELL_GROUND_OP = 0.08 // 지상면 외곽선 (대지 기준선)
 function buildGhostShells() {
   setFloor(null)

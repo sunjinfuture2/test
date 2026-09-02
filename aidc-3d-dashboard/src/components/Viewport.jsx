@@ -672,9 +672,11 @@ export default function Viewport() {
       // 계통 dim: term 그룹 단위 (레퍼런스 동일)
       scene.traverse((o) => {
         if (!o.material) return
-        /* 고스트 쉘: 아이솔레이션 시 타 층의 건물 외곽 실루엣 라인만 표시 */
+        /* 고스트 쉘: 층 아이솔레이션에서 지상면 기준선만 표시.
+           타 층 외곽선은 depthTest를 끈 선이라 선택한 층 위에 그대로 얹히면서
+           내용을 가려, 켜지 않는다 (shellFloor !== floor 로 바꾸면 되살아난다) */
         if (o.userData.ghostShell) {
-          o.visible = floor !== 'all' && o.userData.shellFloor !== floor
+          o.visible = floor !== 'all' && o.userData.shellFloor === 'ground'
           return
         }
         const base = (o.material.userData && o.material.userData.baseOp !== undefined) ? o.material.userData.baseOp : 1
