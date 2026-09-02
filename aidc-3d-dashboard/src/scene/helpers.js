@@ -134,6 +134,8 @@ export function box(g, x, y, z, w, d, h, hex, opt) {
   g.add(m)
   ctx.pickables.push(m)
   registerFloor(m)
+  /* 선택 포커스: 윤곽선이 없는 부재를 찾아내기 위한 표시 */
+  m.userData.hasEdge = !opt.noedge
   if (!opt.noedge) addEdges(g, geo, m, opt.edge || hex)
   return m
 }
