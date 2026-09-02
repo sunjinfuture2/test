@@ -375,37 +375,58 @@ export default function Viewport() {
       if (hovered && hovered !== useAppStore.getState().selected) buildOutlineEdges(hovered, hoverOutline)
     }
 
+    /* ── 선택 포커스 ──────────────────────────────────────────
+       장비를 고르면 나머지 모델은 흰색 쪽으로 강하게 날리고 반투명하게
+       낮춰, 선택한 장비만 색과 윤곽을 유지하도록 한다. 벽·슬래브·지형은
+       렌더 루프가 매 프레임 불투명도를 몰아가므로 여기서 값을 잡아도
+       덮이는데, 대신 루프 쪽 목표값에 FOCUS_STRUCT_OP를 곱해 함께 낮춘다. */
+    const FOCUS_WHITE = 0.93       // 선택 외 색 → 흰색 블렌드 비율
+    const FOCUS_OP = 0.5           // 선택 외 불투명도 배율
+    const FOCUS_STRUCT_OP = 0.38   // 벽·슬래브 등 구조체 불투명도 배율
+    let focusActive = false
     let focusSaved = []
     function restoreFocus() {
       for (let i = 0; i < focusSaved.length; i++) {
         const f = focusSaved[i]
         f.material.color.copy(f.color)
         if (f.emissive) f.material.emissive.copy(f.emissive)
+        f.material.opacity = f.opacity
+        f.material.transparent = f.transparent
         if (f.hadVC) { f.material.vertexColors = true; f.material.needsUpdate = true }
       }
       focusSaved = []
+      focusActive = false
     }
     function applyFocus(term) {
       restoreFocus()
       const keep = groupReg[term]
-      /* 선택 외 모델: 불투명도 50% 흰색 레이어를 올린 듯 밝게 (색을 흰색으로 50% 블렌드) */
       const whiteTarget = new THREE.Color('#ffffff')
       scene.traverse((o) => {
         if (!o.material || !o.material.color || o.userData.selectionOutline) return
         for (let p = o; p; p = p.parent) if (p === keep) return
         for (let k = 0; k < focusSaved.length; k++) if (focusSaved[k].material === o.material) return
-        const entry = { material: o.material, color: o.material.color.clone() }
+        const entry = {
+          material: o.material,
+          color: o.material.color.clone(),
+          opacity: o.material.opacity,
+          transparent: o.material.transparent,
+        }
         if (o.material.emissive) entry.emissive = o.material.emissive.clone()
         if (o.material.vertexColors) {
           entry.hadVC = true
           o.material.vertexColors = false
           o.material.needsUpdate = true
-          o.material.color.set('#f2f4f6')
+          o.material.color.set('#f8f9fb')
         } else {
-          o.material.color.lerp(whiteTarget, 0.8)
+          o.material.color.lerp(whiteTarget, FOCUS_WHITE)
         }
+        const base = (o.material.userData && o.material.userData.baseOp !== undefined)
+          ? o.material.userData.baseOp : o.material.opacity
+        o.material.transparent = true
+        o.material.opacity = Math.min(o.material.opacity, base * FOCUS_OP)
         focusSaved.push(entry)
       })
+      focusActive = true
     }
 
     const selectionOutline = []
@@ -674,6 +695,9 @@ export default function Viewport() {
       layoutLabels(true)
       syncLabels()
       syncFlowUI()
+      /* 위 traverse가 불투명도를 base로 되돌리므로 선택 중이면 다시 입힌다 */
+      const selNow = useAppStore.getState().selected
+      if (selNow && groupReg[selNow]) applyFocus(selNow)
     }
 
     /* ── Flow 토글 (레퍼런스 syncFlowUI 포팅) ── */
@@ -890,9 +914,10 @@ export default function Viewport() {
         // 임계값 스위치 대신 연속 페이드라 각도 회전 시 팝핑이 없고,
         // 양면 렌더링 백드롭 덕에 관통 시 흰 쐐기도 생기지 않는다
         const terrFace = THREE.MathUtils.clamp(wf.n.dot(camDirH) / 0.4, 0, 1)
-        const tgt = wf.m.userData._dimmed ? 0.06
+        let tgt = wf.m.userData._dimmed ? 0.06
           : wf.m.userData.terrain ? (isoFloorNow === 'b1' ? 0.12 : 0.5 - 0.42 * terrFace)
           : ((wf.n.dot(camDirH) > 0.18) ? 0.07 : (floorIso ? 0.26 : 0.95))
+        if (focusActive) tgt *= FOCUS_STRUCT_OP
         wf.m.material.transparent = true
         wf.m.material.opacity += (tgt - wf.m.material.opacity) * 0.18
         if (!wf.e.material.userData._ghost)
@@ -909,6 +934,7 @@ export default function Viewport() {
         else if (isoFloor !== 'all' && s.floor === isoFloor) tgt = 0.97  // 선택 층의 바닥판은 흰 플레이트로
         else if (selZ < s.zTop - 1) tgt = 0.08
         else if (s.floor === 'roof' && sph.pol < 0.62) tgt = 0.1
+        if (focusActive) tgt *= FOCUS_STRUCT_OP
         s.m.material.transparent = true
         s.m.material.opacity += (tgt - s.m.material.opacity) * 0.15
         s.e.material.transparent = true
