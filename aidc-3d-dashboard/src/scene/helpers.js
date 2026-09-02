@@ -396,6 +396,8 @@ export function wall(x, y, z, w, d, h, nx, nz, interior, hexOverride) {
      (모서리 라인 컬러는 아래 edgeColor 그대로) */
   if (!hexOverride) m.material.emissive = new THREE.Color('#9a9ca0')
   m.material.depthWrite = !interior
+  /* 선택 포커스: 장식물 판별에서 구조체를 제외하기 위한 표시 */
+  m.userData.structureMesh = true
   m.position.set(x + w / 2 - CX, Z0 + H / 2, y + d / 2 - CZ)
   g.add(m)
   registerFloor(m)
@@ -429,6 +431,7 @@ export function slab(x, y, z, w, d, th, floorId, hexBody, hexTop, baseOp) {
   /* 슬래브 측면 밴드 밝기 +50% (#D3D8DC → 흰색 방향 50% 블렌드) */
   const m = new THREE.Mesh(geo, lam(hexBody || '#E9EBED', op))
   m.material.depthWrite = false
+  m.userData.structureMesh = true
   m.position.set(x + w / 2 - CX, Z - TH / 2, y + d / 2 - CZ)
   g.add(m)
   registerFloor(m)
