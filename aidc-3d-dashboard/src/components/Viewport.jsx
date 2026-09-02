@@ -381,8 +381,8 @@ export default function Viewport() {
        렌더 루프가 매 프레임 불투명도를 몰아가므로 여기서 값을 잡아도
        덮이는데, 대신 루프 쪽 목표값에 FOCUS_STRUCT_OP를 곱해 함께 낮춘다. */
     const FOCUS_WHITE = 0.95       // 선택 외 색 → 흰색 블렌드 비율
-    const FOCUS_OP = 0.5           // 선택 외 불투명도 배율
-    const FOCUS_STRUCT_OP = 0.38   // 벽·슬래브 등 구조체 불투명도 배율
+    const FOCUS_OP = 0.2           // 선택 외 불투명도 배율
+    const FOCUS_STRUCT_OP = 0.14   // 벽·슬래브 등 구조체 불투명도 배율
     let focusActive = false
     let focusSaved = []
     function restoreFocus() {
@@ -392,6 +392,7 @@ export default function Viewport() {
         if (f.emissive) f.material.emissive.copy(f.emissive)
         f.material.opacity = f.opacity
         f.material.transparent = f.transparent
+        f.material.depthWrite = f.depthWrite
         if (f.hadVC) { f.material.vertexColors = true; f.material.needsUpdate = true }
       }
       focusSaved = []
@@ -410,6 +411,7 @@ export default function Viewport() {
           color: o.material.color.clone(),
           opacity: o.material.opacity,
           transparent: o.material.transparent,
+          depthWrite: o.material.depthWrite,
         }
         if (o.material.emissive) entry.emissive = o.material.emissive.clone()
         if (o.material.vertexColors) {
@@ -424,6 +426,10 @@ export default function Viewport() {
           ? o.material.userData.baseOp : o.material.opacity
         o.material.transparent = true
         o.material.opacity = Math.min(o.material.opacity, base * FOCUS_OP)
+        /* 깊이 기록을 꺼야 뒤쪽 형상이 가려지지 않고 제대로 비쳐 보인다 */
+        o.material.depthWrite = false
+        /* 유체 패킷은 자체 발광이라 투명해져도 색점으로 남는다 → 발광도 낮춘다 */
+        if (o.userData.flowParticle && o.material.emissive) o.material.emissive.multiplyScalar(0.06)
         focusSaved.push(entry)
       })
       focusActive = true
