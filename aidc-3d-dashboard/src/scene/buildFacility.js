@@ -45,8 +45,32 @@ export function buildFacility(scene) {
   buildDetailPlus()
   buildGhostShells()
   buildFlows()
+  ctx.floorTerms = collectFloorTerms()
 
   return ctx
+}
+
+/**
+ * 층별로 실제 배치된 용어 id 목록 — 사이드바 층 필터용.
+ *
+ * 라벨 앵커는 용어당 하나뿐이라 여러 층에 걸친 설비(수배전반·축전지실 등)를
+ * 한 층으로만 잡는다. 그래서 빌드된 씬에서 용어 그룹의 메시가 어느 층에
+ * 태깅됐는지를 직접 훑어 층 소속을 만든다.
+ */
+function collectFloorTerms() {
+  const byFloor = { b1: [], f1: [], f2: [], roof: [] }
+  for (const term in ctx.groupReg) {
+    const seen = {}
+    ctx.groupReg[term].traverse((o) => {
+      // 흐름 패킷은 배관과 같은 층에 태깅되므로 중복 순회만 늘린다 → 건너뜀
+      if (!o.isMesh || o.userData.flowParticle) return
+      const f = o.userData.floor
+      if (!f || !byFloor[f] || seen[f]) return
+      seen[f] = true
+      byFloor[f].push(term)
+    })
+  }
+  return byFloor
 }
 
 /* ═══ 층 아이솔레이션 고스트 쉘 — 타 층은 건물 외곽 실루엣 라인만 표시 ═══
