@@ -408,6 +408,8 @@ export function wall(x, y, z, w, d, h, nx, nz, interior, hexOverride) {
   e.position.copy(m.position)
   e.userData.isEdge = true
   e.userData.structure = true // 층 고스트: 건물 구조 라인만 유지
+  /* 선택 포커스: 외벽선은 진하게, 칸막이선은 연하게 구분하기 위한 표시 */
+  e.userData.interiorWall = !!interior
   g.add(e)
   registerFloor(e)
   if (!interior) ctx.wallsFade.push({ m, e, n: new THREE.Vector3(nx, 0, nz) })
