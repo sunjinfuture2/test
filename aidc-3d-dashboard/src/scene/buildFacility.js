@@ -73,7 +73,12 @@ function collectFloorTerms() {
 
 /* ═══ 층 아이솔레이션 고스트 쉘 — 타 층은 건물 외곽 실루엣 라인만 표시 ═══
    두께 없는 단일 외곽 박스 와이어프레임(층×동). 평소 숨김, Viewport의
-   applyVisibility가 아이솔레이션 시 해당 층 외의 쉘만 켠다. */
+   applyVisibility가 아이솔레이션 시 해당 층 외의 쉘만 켠다.
+
+   depthTest를 끈 검정 선이라 모델 위에 그대로 얹힌다 → 낮은 불투명도에서도
+   존재감이 커서, 선택한 층을 가리지 않을 만큼만 남긴다. */
+const SHELL_OP = 0.05        // 타 층 외곽선
+const SHELL_GROUND_OP = 0.08 // 지상면 외곽선 (대지 기준선)
 function buildGhostShells() {
   setFloor(null)
   const g = G(null, null)
@@ -84,9 +89,9 @@ function buildGhostShells() {
       const geo = new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, r.y1 - r.y0)
       const ls = new THREE.LineSegments(
         new THREE.EdgesGeometry(geo),
-        new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15, depthTest: false, depthWrite: false }),
+        new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: SHELL_OP, depthTest: false, depthWrite: false }),
       )
-      ls.material.userData = { baseOp: 0.15 }
+      ls.material.userData = { baseOp: SHELL_OP }
       ls.position.set(r.x0 + (r.x1 - r.x0) / 2 - CX, z0 + (z1 - z0) / 2, r.y0 + (r.y1 - r.y0) / 2 - CZ)
       ls.renderOrder = 60
       ls.userData.ghostShell = true
@@ -100,9 +105,9 @@ function buildGhostShells() {
   const EXT = { x0: -14, y0: -10, w: 152, d: 126 }
   const gnd = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.PlaneGeometry(EXT.w, EXT.d)),
-    new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15, depthTest: false, depthWrite: false }),
+    new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: SHELL_GROUND_OP, depthTest: false, depthWrite: false }),
   )
-  gnd.material.userData = { baseOp: 0.15 }
+  gnd.material.userData = { baseOp: SHELL_GROUND_OP }
   gnd.rotation.x = -Math.PI / 2
   gnd.position.set(EXT.x0 + EXT.w / 2 - CX, MZS(GL) + 0.05, EXT.y0 + EXT.d / 2 - CZ)
   gnd.renderOrder = 60
