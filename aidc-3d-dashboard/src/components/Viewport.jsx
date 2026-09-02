@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { buildFacility, LABELS } from '../scene/buildFacility.js'
 import { ctx } from '../scene/helpers.js'
-import { CX, CZ } from '../scene/helpers.js'
+import { CX, CZ, MY, MZ } from '../scene/helpers.js'
 import { TERMS, CATS } from '../data/terms.js'
 import { useAppStore } from '../store/useAppStore.js'
 
@@ -21,9 +21,10 @@ import { useAppStore } from '../store/useAppStore.js'
 
 function V(x, y, z) { return new THREE.Vector3(x - CX, z, y - CZ) }
 
-const FLOOR_OF_Z = (z) => (z < 12 ? 'b1' : z < 25.5 ? 'f1' : z < 39 ? 'f2' : 'roof')
-/* 층별 z-대역 (도면 좌표) — 흐름 배관/도트의 층 아이솔레이션 판정용 */
-const FLOOR_BANDS = { b1: [-99, 12], f1: [12, 25.5], f2: [25.5, 39], roof: [39, 999] }
+/* 층 판정 임계값 — 매핑 후 좌표(층 피치 20.25m) 기준 */
+const FLOOR_OF_Z = (z) => (z < 18 ? 'b1' : z < 38.25 ? 'f1' : z < 58.5 ? 'f2' : 'roof')
+/* 층별 z-대역 (매핑 후 좌표) — 흐름 배관/도트의 층 아이솔레이션 판정용 */
+const FLOOR_BANDS = { b1: [-99, 18], f1: [18, 38.25], f2: [38.25, 58.5], roof: [58.5, 999] }
 
 export default function Viewport() {
   const hostRef = useRef(null)
@@ -46,13 +47,13 @@ export default function Viewport() {
     renderer.setClearColor(0xffffff, 1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     const scene = new THREE.Scene()
-    // 시인성 확장: 수평 1.8배(면적 3.24배) · 수직 2.2배(층고 피치 13.5→29.7m)
+    // 시인성 확장: 수평 1.8배(면적 3.24배) · 수직 2.2배(층고 피치 20.25→44.6m)
     // 도면 좌표계는 그대로 두고 씬 루트 그룹을 비등방 스케일한다
     const FS = new THREE.Vector3(1.8, 2.2, 1.8)
     const camera = new THREE.PerspectiveCamera(33, 1, 1, 8000)
-    const target = new THREE.Vector3(-40, 14, -11)
-    const sph = { az: -0.62, pol: 1.02, dist: 630 }
-    const HOME = { az: -0.62, pol: 1.02, dist: 630, tx: -40, ty: 22, tz: -11 }
+    const target = new THREE.Vector3(-40, 21, 3)
+    const sph = { az: -0.62, pol: 1.02, dist: 700 }
+    const HOME = { az: -0.62, pol: 1.02, dist: 700, tx: -40, ty: 33, tz: 3 }
 
     function updateCam() {
       const sp = Math.sin(sph.pol), cp = Math.cos(sph.pol)
@@ -97,7 +98,7 @@ export default function Viewport() {
     for (let i = 0; i < LABELS.length; i++) {
       const id = LABELS[i][0]
       const t = TERMS[id]
-      anchorZ[id] = LABELS[i][1][2]
+      anchorZ[id] = MZ(LABELS[i][1][2])
       const div = document.createElement('div')
       div.className = 'lbl'
       div.setAttribute('data-label-id', id)
@@ -118,9 +119,9 @@ export default function Viewport() {
       dot.setAttribute('stroke', '#929497'); dot.setAttribute('stroke-opacity', '0.88')
       leadersSvg.appendChild(dot)
       labelObjs.push({
-        id, anchor: V(LABELS[i][1][0], LABELS[i][1][1], LABELS[i][1][2]).multiply(FS),
+        id, anchor: V(LABELS[i][1][0], MY(LABELS[i][1][1]), MZ(LABELS[i][1][2])).multiply(FS),
         div, line: ln, dot, hidden: false, sx: 0, sy: 0,
-        floor: FLOOR_OF_Z(LABELS[i][1][2]),
+        floor: FLOOR_OF_Z(MZ(LABELS[i][1][2])),
       })
     }
 
@@ -663,7 +664,7 @@ export default function Viewport() {
     function onWheel(e) {
       e.preventDefault()
       camGoal = null
-      const newDist = Math.max(52, Math.min(1100, sph.dist * (e.deltaY > 0 ? 1.1 : 1 / 1.1)))
+      const newDist = Math.max(52, Math.min(1400, sph.dist * (e.deltaY > 0 ? 1.1 : 1 / 1.1)))
       const applied = newDist / sph.dist
       const r = canvas.getBoundingClientRect()
       mv.x = ((e.clientX - r.left) / r.width) * 2 - 1
