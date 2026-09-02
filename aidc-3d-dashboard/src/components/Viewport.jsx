@@ -78,6 +78,19 @@ export default function Viewport() {
     buildFacility(facilityRoot)
     const { groupReg, pickables, wallsFade, flows, slabs } = ctx
 
+    /* ── 비선택 장식물 ───────────────────────────────────────────
+       책상·모니터·집기·수목·바닥 마킹처럼 용어로 등록되지 않아 선택할 수
+       없는 것들. 장비를 고르면 흰색으로 남겨두는 대신 아예 감춘다.
+       구조체(벽·슬래브)·지형·바닥면·고스트 쉘은 맥락을 주므로 제외한다. */
+    const decorObjects = []
+    facilityRoot.traverse((o) => {
+      if (!o.isMesh && !o.isLineSegments && !o.isLine) return
+      const u = o.userData || {}
+      if (u.structureMesh || u.structure || u.floorTop || u.terrain || u.ghostShell || u.selectionOutline) return
+      for (let p = o; p; p = p.parent) if (p.userData && p.userData.term) return
+      decorObjects.push(o)
+    })
+
     /* 장비 색 보정 — 파스텔 무드: 명도는 유지하고 채도만 살짝 올린다 */
     ;(function enhanceBaseEquipmentColors() {
       const seen = []
@@ -394,7 +407,10 @@ export default function Viewport() {
     const FOCUS_STRUCT_OP = 0.12   // 벽·슬래브 등 구조체 면 불투명도 배율
     let focusActive = false
     let focusSaved = []
+    let focusHidden = []
     function restoreFocus() {
+      for (let i = 0; i < focusHidden.length; i++) focusHidden[i].visible = true
+      focusHidden = []
       for (let i = 0; i < focusSaved.length; i++) {
         const f = focusSaved[i]
         f.material.color.copy(f.color)
@@ -454,6 +470,13 @@ export default function Viewport() {
         o.material.depthWrite = false
         focusSaved.push(entry)
       })
+      /* 장식물은 흰색으로 남기지 않고 감춘다 (층·계통 필터로 이미 숨은 것은 건드리지 않음) */
+      for (let i = 0; i < decorObjects.length; i++) {
+        const o = decorObjects[i]
+        if (!o.visible) continue
+        o.visible = false
+        focusHidden.push(o)
+      }
       focusActive = true
     }
 
