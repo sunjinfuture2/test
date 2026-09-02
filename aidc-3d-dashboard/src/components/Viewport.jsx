@@ -382,11 +382,13 @@ export default function Viewport() {
        덮이는데, 대신 루프 쪽 목표값에 FOCUS_STRUCT_OP를 곱해 함께 낮춘다. */
     /* 선택 외 면은 램버트 음영을 지워 '회색'이 아닌 평평한 흰색으로 만들고
        불투명도를 크게 낮춘다. 형태는 아주 옅은 윤곽선만 남겨 맥락을 준다. */
-    const FOCUS_LINE_WHITE = 0.86  // 선택 외 장비 윤곽선 → 흰색 블렌드 비율
+    /* 면은 흰 배경에 묻혀 불투명도를 올려도 보이지 않는다 — 형태는 전적으로
+       윤곽선이 만든다. 그래서 '조금만 보이게'는 선 쪽 값으로 조절한다. */
+    const FOCUS_LINE_COLOR = new THREE.Color('#c2c6cb') // 선택 외 장비 윤곽선 색
     const FOCUS_OP = 0.16          // 선택 외 면 불투명도 배율
-    const FOCUS_LINE_OP = 0.18     // 선택 외 장비 윤곽선 불투명도 배율
+    const FOCUS_LINE_OP = 0.62     // 선택 외 장비 윤곽선 불투명도 배율
     const FOCUS_STRUCT_OP = 0.12   // 벽·슬래브 등 구조체 면 불투명도 배율
-    const FOCUS_STRUCT_EDGE = 0.16 // 벽·슬래브 윤곽선 불투명도 (건물 외곽 유지)
+    const FOCUS_STRUCT_EDGE = 0.34 // 벽·슬래브 윤곽선 불투명도 (건물 외곽 유지)
     let focusActive = false
     let focusSaved = []
     function restoreFocus() {
@@ -430,9 +432,9 @@ export default function Viewport() {
           /* 건물 구조 라인(외벽·슬래브)은 원래 색을 지켜 옅은 외곽선으로 남긴다.
              불투명도는 렌더 루프가 FOCUS_STRUCT_EDGE로 몰아간다. */
         } else if (isLine) {
-          /* 장비 윤곽선은 거의 지운다 */
-          o.material.color.lerp(whiteTarget, FOCUS_LINE_WHITE)
-          o.material.opacity = Math.min(o.material.opacity, base * FOCUS_LINE_OP)
+          /* 장비는 옅은 회색 윤곽선만 남겨 형태를 알아볼 수 있게 한다 */
+          o.material.color.copy(FOCUS_LINE_COLOR)
+          o.material.opacity = Math.min(1, base * FOCUS_LINE_OP)
         } else {
           /* 램버트 음영이 흰 면을 회색으로 떨어뜨리므로 발광으로 상쇄해
              각도와 무관하게 평평한 흰색이 되게 한다 (유체 패킷도 동일) */
