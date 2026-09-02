@@ -318,8 +318,8 @@ export default function Viewport() {
         item.line.setAttribute('x1', hit.x); item.line.setAttribute('y1', hit.y)
         item.line.setAttribute('x2', lineX); item.line.setAttribute('y2', lineY)
         item.dot.setAttribute('cx', hit.x); item.dot.setAttribute('cy', hit.y)
-        item.line.setAttribute('opacity', item.id === selected ? '1' : (selected ? '.6' : '.78'))
-        item.dot.setAttribute('opacity', item.id === selected ? '1' : (selected ? '.6' : '.78'))
+        item.line.setAttribute('opacity', item.id === selected ? '1' : (selected ? '0' : '.78'))
+        item.dot.setAttribute('opacity', item.id === selected ? '1' : (selected ? '0' : '.78'))
       }
     }
 
@@ -380,9 +380,15 @@ export default function Viewport() {
        낮춰, 선택한 장비만 색과 윤곽을 유지하도록 한다. 벽·슬래브·지형은
        렌더 루프가 매 프레임 불투명도를 몰아가므로 여기서 값을 잡아도
        덮이는데, 대신 루프 쪽 목표값에 FOCUS_STRUCT_OP를 곱해 함께 낮춘다. */
-    const FOCUS_WHITE = 0.95       // 선택 외 색 → 흰색 블렌드 비율
-    const FOCUS_OP = 0.5           // 선택 외 불투명도 배율
-    const FOCUS_STRUCT_OP = 0.38   // 벽·슬래브 등 구조체 불투명도 배율
+    /* 선택 외 면은 램버트 음영을 지워 '회색'이 아닌 평평한 흰색으로 만들고
+       불투명도를 크게 낮춘다. 형태는 아주 옅은 윤곽선만 남겨 맥락을 준다. */
+    /* 면은 흰 배경에 묻혀 불투명도를 올려도 보이지 않는다 — 형태는 전적으로
+       윤곽선이 만든다. 그래서 '조금만 보이게'는 선 쪽 값으로 조절한다. */
+    const FOCUS_LINE_COLOR = new THREE.Color('#c2c6cb') // 선택 외 장비 윤곽선 색
+    const FOCUS_OP = 0.16          // 선택 외 면 불투명도 배율
+    const FOCUS_LINE_OP = 0.62     // 선택 외 장비 윤곽선 불투명도 배율
+    const FOCUS_STRUCT_OP = 0.12   // 벽·슬래브 등 구조체 면 불투명도 배율
+    const FOCUS_STRUCT_EDGE = 0.34 // 벽·슬래브 윤곽선 불투명도 (건물 외곽 유지)
     let focusActive = false
     let focusSaved = []
     function restoreFocus() {
@@ -392,6 +398,7 @@ export default function Viewport() {
         if (f.emissive) f.material.emissive.copy(f.emissive)
         f.material.opacity = f.opacity
         f.material.transparent = f.transparent
+        f.material.depthWrite = f.depthWrite
         if (f.hadVC) { f.material.vertexColors = true; f.material.needsUpdate = true }
       }
       focusSaved = []
@@ -410,20 +417,34 @@ export default function Viewport() {
           color: o.material.color.clone(),
           opacity: o.material.opacity,
           transparent: o.material.transparent,
+          depthWrite: o.material.depthWrite,
         }
         if (o.material.emissive) entry.emissive = o.material.emissive.clone()
         if (o.material.vertexColors) {
           entry.hadVC = true
           o.material.vertexColors = false
           o.material.needsUpdate = true
-          o.material.color.set('#f8f9fb')
-        } else {
-          o.material.color.lerp(whiteTarget, FOCUS_WHITE)
         }
         const base = (o.material.userData && o.material.userData.baseOp !== undefined)
           ? o.material.userData.baseOp : o.material.opacity
+        const isLine = o.isLineSegments === true || o.isLine === true
+        if (isLine && o.userData.structure) {
+          /* 건물 구조 라인(외벽·슬래브)은 원래 색을 지켜 옅은 외곽선으로 남긴다.
+             불투명도는 렌더 루프가 FOCUS_STRUCT_EDGE로 몰아간다. */
+        } else if (isLine) {
+          /* 장비는 옅은 회색 윤곽선만 남겨 형태를 알아볼 수 있게 한다 */
+          o.material.color.copy(FOCUS_LINE_COLOR)
+          o.material.opacity = Math.min(1, base * FOCUS_LINE_OP)
+        } else {
+          /* 램버트 음영이 흰 면을 회색으로 떨어뜨리므로 발광으로 상쇄해
+             각도와 무관하게 평평한 흰색이 되게 한다 (유체 패킷도 동일) */
+          o.material.color.set(whiteTarget)
+          if (o.material.emissive) o.material.emissive.set(whiteTarget)
+          o.material.opacity = Math.min(o.material.opacity, base * FOCUS_OP)
+        }
         o.material.transparent = true
-        o.material.opacity = Math.min(o.material.opacity, base * FOCUS_OP)
+        /* 깊이 기록을 꺼야 뒤쪽 형상이 가려지지 않고 제대로 비쳐 보인다 */
+        o.material.depthWrite = false
         focusSaved.push(entry)
       })
       focusActive = true
@@ -636,8 +657,10 @@ export default function Viewport() {
         L.dot.setAttribute('stroke', same ? '#000' : '#929497')
         L.dot.setAttribute('stroke-opacity', same ? '1' : '.88')
         L.line.setAttribute('stroke-opacity', same ? '1' : '.88')
-        L.line.setAttribute('opacity', same ? '1' : (selected ? '.6' : '.78'))
-        L.dot.setAttribute('opacity', same ? '1' : (selected ? '.6' : '.78'))
+        /* 선택 중에는 다른 라벨의 리더선·점을 숨긴다 — 모델이 흰색으로
+           물러난 상태에서 이것들만 남으면 허공에 뜬 점·선으로 보인다 */
+        L.line.setAttribute('opacity', same ? '1' : (selected ? '0' : '.78'))
+        L.dot.setAttribute('opacity', same ? '1' : (selected ? '0' : '.78'))
         ;(same ? selectedLeaderSvg : leadersSvg).appendChild(L.line)
         ;(same ? selectedLeaderSvg : leadersSvg).appendChild(L.dot)
       }
@@ -921,7 +944,9 @@ export default function Viewport() {
         wf.m.material.transparent = true
         wf.m.material.opacity += (tgt - wf.m.material.opacity) * 0.18
         if (!wf.e.material.userData._ghost)
-          wf.e.material.opacity = wf.m.material.opacity > 0.4 ? wf.e.material.userData.baseOp : (floorIso && !wf.m.userData._dimmed ? 0.3 : 0)
+          wf.e.material.opacity = focusActive ? FOCUS_STRUCT_EDGE
+            : wf.m.material.opacity > 0.4 ? wf.e.material.userData.baseOp
+            : (floorIso && !wf.m.userData._dimmed ? 0.3 : 0)
       }
       /* 상부 슬래브 페이드: 탑뷰 · 하부 장비 선택 · 층 필터 연동 */
       const selected = useAppStore.getState().selected
@@ -939,7 +964,7 @@ export default function Viewport() {
         s.m.material.opacity += (tgt - s.m.material.opacity) * 0.15
         s.e.material.transparent = true
         if (!s.e.material.userData || !s.e.material.userData._ghost)
-          s.e.material.opacity = s.m.material.opacity > 0.4 ? 1 : 0
+          s.e.material.opacity = focusActive ? FOCUS_STRUCT_EDGE : (s.m.material.opacity > 0.4 ? 1 : 0)
         s.top.material.opacity = Math.min(s.top.material.userData.baseOp, s.m.material.opacity)
       }
       /* 유체 패킷 */
