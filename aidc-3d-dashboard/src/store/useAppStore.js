@@ -1,13 +1,15 @@
 import { create } from 'zustand'
 import { LABELS } from '../scene/buildFacility.js'
+import { MZ } from '../scene/helpers.js'
 
-const FLOOR_OF_Z = (z) => (z < 12 ? 'b1' : z < 25.5 ? 'f1' : z < 39 ? 'f2' : 'roof')
+/* 층 판정 임계값 — 매핑 후 좌표(층 피치 20.25m) 기준 */
+const FLOOR_OF_Z = (z) => (z < 18 ? 'b1' : z < 38.25 ? 'f1' : z < 58.5 ? 'f2' : 'roof')
 
 /** 용어의 라벨 앵커 높이로 소속 층 결정 (fws는 전 층 관통 → 전체 유지) */
 function floorOfTerm(id) {
   if (id === 'fws') return 'all'
   const entry = LABELS.find((l) => l[0] === id)
-  return entry ? FLOOR_OF_Z(entry[1][2]) : 'all'
+  return entry ? FLOOR_OF_Z(MZ(entry[1][2])) : 'all'
 }
 
 /**

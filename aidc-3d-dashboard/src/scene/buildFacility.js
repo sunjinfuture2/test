@@ -1,8 +1,11 @@
 import * as THREE from 'three'
 import {
-  ctx, resetCtx, setFloor, tagFloor, G, V, lam, box, cylY, cylDir, pipe, wall, slab,
-  topSurface, gradientGroundSurface, applySiteEdgeFade, fanTop, fanFront, ladder, addEdges, P, CX, CZ,
+  ctx, resetCtx, setFloor, G, box, cylY, cylDir, pipe, wall, slab, sph,
+  topSurface, gradientGroundSurface, applySiteEdgeFade, fanTop, fanFront, ladder, P, CX, CZ,
+  MY, MZS,
 } from './helpers.js'
+
+export { MZ, MY } from './helpers.js'
 
 /**
  * 충주 데이터센터 — 평면도(지하1층 / 1층 / 2층) 정밀 반영 모델.
@@ -11,7 +14,10 @@ import {
  *   전산동: x 0~105.3 (그리드 1~15), y 0~38.6 (그리드 N~H, 북→남)
  *   공급동: x 4.2~63.9 (그리드 1~9), y 54~104 (전산동 남측)
  *   사이 마당(주차 밴드): y 38.6~54 — 지반(GL) 높이, 공동구가 지하로 관통
- *   레벨:   B1 바닥 z=0 · 1F(GL) z=9 · 2F z=18 · 옥상 z=27
+ *   레벨:   B1 바닥 z=0 · 1F(GL) z=13.5 · 2F z=27 · 옥상 z=40.5
+ *
+ * 아래 좌표는 모두 '도면 원본' 값이다. 층고·동간 이격·요소 크기 배율은
+ * helpers.js의 SCALE(floor/gap/elem)과 좌표 매핑(MZ·MZS·MY)이 적용한다.
  *
  * 도면 디테일 반영:
  *   공동구(전산동↔공급동 + 동측 스텁), GIS 상부 오픈, 옥외유류탱크(B1 피트
@@ -23,7 +29,6 @@ import {
 
 const MAIN = { x0: 0, x1: 105.3, y0: 0, y1: 38.6 }   // 전산동
 const SUP = { x0: 4.2, x1: 63.9, y0: 54, y1: 104 }    // 공급동
-/* 층고 1.5배 (피치 9m → 13.5m) */
 const LV = { b1: 0, f1: 13.5, f2: 27, roof: 40.5 }
 const WH = 8.7   // 장비 기준 높이 (덕트·팬월 등 배치 좌표에만 사용)
 const XWH = 12.5 // 벽 높이 — 층 피치 13.5 − 슬래브 두께 1: 벽 상단이 천장 슬래브에 밀착
@@ -52,15 +57,16 @@ function buildGhostShells() {
   const g = G(null, null)
   const bands = { b1: [0, 13.5], f1: [13.5, 27], f2: [27, 40.5], roof: [40.5, 41.7] }
   for (const f in bands) {
-    const z0 = bands[f][0], z1 = bands[f][1]
+    const z0 = MZS(bands[f][0]), z1 = MZS(bands[f][1])
     for (const r of [MAIN, SUP]) {
-      const geo = new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, r.y1 - r.y0)
+      const ry0 = MY(r.y0), ry1 = MY(r.y1)
+      const geo = new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, ry1 - ry0)
       const ls = new THREE.LineSegments(
         new THREE.EdgesGeometry(geo),
         new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15, depthTest: false, depthWrite: false }),
       )
       ls.material.userData = { baseOp: 0.15 }
-      ls.position.set(r.x0 + (r.x1 - r.x0) / 2 - CX, z0 + (z1 - z0) / 2, r.y0 + (r.y1 - r.y0) / 2 - CZ)
+      ls.position.set(r.x0 + (r.x1 - r.x0) / 2 - CX, z0 + (z1 - z0) / 2, ry0 + (ry1 - ry0) / 2 - CZ)
       ls.renderOrder = 60
       ls.userData.ghostShell = true
       ls.userData.shellFloor = f
@@ -70,14 +76,14 @@ function buildGhostShells() {
   }
   /* 지상면 외곽선 — 층별 보기 중 항상 표시해 지면 기준을 잡아준다
      (shellFloor 'ground'는 어떤 층과도 일치하지 않아 아이솔레이션 내내 켜짐) */
-  const EXT = { x0: -21.6, y0: -16.3, w: 167.2, d: 138.6 }
+  const EXT = { x0: -21.6, y0: MY(-16.3), w: 167.2, d: MY(122.3) - MY(-16.3) }
   const gnd = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.PlaneGeometry(EXT.w, EXT.d)),
     new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15, depthTest: false, depthWrite: false }),
   )
   gnd.material.userData = { baseOp: 0.15 }
   gnd.rotation.x = -Math.PI / 2
-  gnd.position.set(EXT.x0 + EXT.w / 2 - CX, GL + 0.05, EXT.y0 + EXT.d / 2 - CZ)
+  gnd.position.set(EXT.x0 + EXT.w / 2 - CX, MZS(GL) + 0.05, EXT.y0 + EXT.d / 2 - CZ)
   gnd.renderOrder = 60
   gnd.userData.ghostShell = true
   gnd.userData.shellFloor = 'ground'
@@ -110,7 +116,7 @@ function buildSite() {
     wm.material.depthWrite = false
     wm.material.side = THREE.DoubleSide
     // 땅 깊이 볼륨이 대지 경계에서 뚝 끊기지 않게 — 경계 안 16m 구간 소산
-    applySiteEdgeFade(wm, 76, 63, 16)
+    applySiteEdgeFade(wm, 76, (MY(116) - MY(-10)) / 2, 16)
     const ts = topSurface(g, x, y, GL + 0.02, w, d, P.slabTop)
     ts.userData.terrain = true
   }
@@ -181,9 +187,7 @@ function buildSite() {
   function tree(x, y, s) {
     s = s || 1
     cylY(sd, x, y, GL, 0.22 * s, 1.5 * s, '#B99B72', { seg: 8 })
-    const crown = new THREE.Mesh(new THREE.SphereGeometry(1.5 * s, 10, 8), lam('#A8CFA0'))
-    crown.position.copy(V(x, y, GL + 2.3 * s))
-    sd.add(crown)
+    sph(sd, x, y, GL + 2.3 * s, 1.5 * s, '#A8CFA0', { seg: 10, segY: 8 })
   }
   tree(88, 60); tree(98, 66, 1.2); tree(110, 62); tree(120, 72, 1.1)
   tree(92, 86, 1.2); tree(104, 92); tree(116, 88, 1.3); tree(126, 98)
@@ -266,8 +270,7 @@ function buildB1() {
       }
       for (let b = 0; b < 3; b++) {
         cylY(g, x + 0.9 + b * 1.3, 7.5, 3.2, 0.28, 0.9, '#EDE7D8')
-        const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), lam('#E0AC2E'))
-        cap.position.copy(V(x + 0.9 + b * 1.3, 7.5, 4.3)); g.add(cap); tagFloor(cap)
+        sph(g, x + 0.9 + b * 1.3, 7.5, 4.3, 0.24, '#E0AC2E')
       }
       box(g, x + 0.4, 11.5, 0, 3.6, 1.6, 2.2, '#F2CE6A', { noedge: true })
     }
@@ -321,9 +324,7 @@ function buildB1() {
     const g = G('tes', 'cooling')
     function tank(x, y) {
       cylY(g, x, y, 0, 3.4, 6.8, '#E7EDF2', { seg: 26 })
-      const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(3.4, 26, 12, 0, Math.PI * 2, 0, Math.PI / 2), lam('#DDE5EB'))
-      dome.position.copy(V(x, y, 6.8)); g.add(dome); ctx.pickables.push(dome); tagFloor(dome)
+      sph(g, x, y, 6.8, 3.4, '#DDE5EB', { half: true, seg: 26, segY: 12, pick: true })
       cylY(g, x, y, 2.2, 3.55, 0.28, '#C5D3DE', { seg: 26 })
       cylY(g, x, y, 4.7, 3.55, 0.28, '#C5D3DE', { seg: 26 })
       ladder(g, x + 3.9, y, 0, 6.4)
