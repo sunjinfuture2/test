@@ -400,6 +400,12 @@ export default function Viewport() {
          진하게 — 장비 윤곽선, 건물 외벽선 (형태를 읽는 기준)
          연하게 — 칸막이·슬래브·지형선 (있다는 것만 알 정도) */
     const FOCUS_EDGE_COLOR = new THREE.Color('#a9aeb4') // 선택 외 장비 윤곽선 색
+    /* 선택 외 장비 면은 순백이 아니라 아주 옅은 회색으로 둔다 —
+       cylY·cylDir은 윤곽선을 만들지 않으므로(box만 addEdges 호출) 원통으로만
+       이루어진 설비(유류탱크·축열조·펌프 등)는 면이 흰색이면 통째로 사라진다.
+       실루엣이 남아야 형태를 알 수 있다. 배관·흐름 패킷은 제외(흰색 유지). */
+    const FOCUS_TERM_COLOR = new THREE.Color('#c4cad1')
+    const FOCUS_TERM_OP = 0.6      // 선택 외 장비 면 불투명도
     const FOCUS_OP = 0.16          // 선택 외 면 불투명도 배율
     const FOCUS_EDGE_OP = 0.5      // 장비 윤곽선 불투명도 (절대값)
     const FOCUS_EXT_EDGE = 0.72    // 건물 외벽 윤곽선 불투명도
@@ -429,7 +435,12 @@ export default function Viewport() {
       const whiteTarget = new THREE.Color('#ffffff')
       scene.traverse((o) => {
         if (!o.material || !o.material.color || o.userData.selectionOutline) return
-        for (let p = o; p; p = p.parent) if (p === keep) return
+        /* 선택 그룹 제외 + 다른 용어 그룹(=선택 가능한 장비)인지 판별 */
+        let inTerm = false
+        for (let p = o; p; p = p.parent) {
+          if (p === keep) return
+          if (p.userData && p.userData.term) inTerm = true
+        }
         for (let k = 0; k < focusSaved.length; k++) if (focusSaved[k].material === o.material) return
         const entry = {
           material: o.material,
@@ -458,9 +469,15 @@ export default function Viewport() {
              재질별 baseOp(0.55 등)에 곱하면 묻히므로 절대값으로 잡는다 */
           o.material.color.copy(FOCUS_EDGE_COLOR)
           o.material.opacity = FOCUS_EDGE_OP
+        } else if (inTerm && !o.userData.flowPart) {
+          /* 다른 장비 면 — 옅은 회색 실루엣으로 남긴다 (원통 설비도 보이도록).
+             발광을 같은 색으로 넣어 각도에 따라 어두워지지 않게 한다 */
+          o.material.color.copy(FOCUS_TERM_COLOR)
+          if (o.material.emissive) o.material.emissive.copy(FOCUS_TERM_COLOR)
+          o.material.opacity = FOCUS_TERM_OP
         } else {
-          /* 램버트 음영이 흰 면을 회색으로 떨어뜨리므로 발광으로 상쇄해
-             각도와 무관하게 평평한 흰색이 되게 한다 (유체 패킷도 동일) */
+          /* 구조체·배관·흐름 패킷 — 램버트 음영을 발광으로 상쇄해
+             각도와 무관하게 평평한 흰색이 되게 한다 */
           o.material.color.set(whiteTarget)
           if (o.material.emissive) o.material.emissive.set(whiteTarget)
           o.material.opacity = Math.min(o.material.opacity, base * FOCUS_OP)
