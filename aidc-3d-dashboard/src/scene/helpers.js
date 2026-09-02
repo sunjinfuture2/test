@@ -79,6 +79,7 @@ export const ctx = {
   floorMeshes: { b1: [], f1: [], f2: [], roof: [] }, // 층별 mesh (층 필터용)
   slabs: [],         // { m, e, top, zTop, floor } 상부 슬래브 (선택 시 페이드)
   currentFloor: null,
+  floorPlan: null,   // 설계도(층별 평면 배치) — 빌드 후 채워짐
 }
 
 export function resetCtx(scene) {
@@ -90,6 +91,7 @@ export function resetCtx(scene) {
   ctx.floorMeshes = { b1: [], f1: [], f2: [], roof: [] }
   ctx.slabs = []
   ctx.currentFloor = null
+  ctx.floorPlan = null
 }
 
 export function setFloor(floor) {

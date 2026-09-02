@@ -68,10 +68,28 @@ export const useAppStore = create((set) => ({
   labelsOn: true,
   toggleLabels: () => set((s) => ({ labelsOn: !s.labelsOn })),
 
+  /** 설계도(층별 평면 배치도) 표시 여부 · 단일 층 확대 대상 */
+  blueprintOn: false,
+  toggleBlueprint: () => set((s) => ({ blueprintOn: !s.blueprintOn, blueprintZoom: null })),
+  closeBlueprint: () => set({ blueprintOn: false, blueprintZoom: null }),
+  blueprintZoom: null,
+  setBlueprintZoom: (blueprintZoom) => set({ blueprintZoom }),
+
   /** 카메라 리셋 트리거 — 시점 초기화 + 선택 해제 + 층 필터 '전체' 복귀 */
   resetTick: 0,
   requestReset: () =>
     set((s) => ({ resetTick: s.resetTick + 1, selected: null, floor: 'all' })),
+
+  /** 설계도에서 장비 클릭 — 해당 층 3D로 이동 */
+  openFromBlueprint: (id, floor) =>
+    set((s) => ({
+      blueprintOn: false,
+      blueprintZoom: null,
+      selected: id,
+      floor,
+      focusId: id,
+      focusTick: s.focusTick + 1,
+    })),
 
   /** 사이드바 검색어 */
   query: '',

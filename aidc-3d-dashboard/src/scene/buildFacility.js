@@ -45,8 +45,68 @@ export function buildFacility(scene) {
   buildDetailPlus()
   buildGhostShells()
   buildFlows()
+  ctx.floorPlan = collectFloorPlan()
 
   return ctx
+}
+
+/* ═══════════════ 설계도 (층별 평면 배치) ═══════════════
+   빌드된 씬에서 용어별·층별 장비 중심을 뽑아 평면 배치도 좌표를 만든다.
+   씬 좌표 → 평면 좌표 역변환: x = pos.x + CX, y = pos.z + CZ */
+
+/** 층별 건물 외곽 (매핑 후 평면 좌표) — 배치도의 바탕 도형 */
+export const PLAN_SHAPES = (() => {
+  const main = { x: MAIN.x0, y: MAIN.y0, w: MAIN.x1 - MAIN.x0, d: MAIN.y1 - MAIN.y0, name: '전산동' }
+  const sup = { x: SUP.x0, y: MY(SUP.y0), w: SUP.x1 - SUP.x0, d: MY(SUP.y1) - MY(SUP.y0), name: '공급동' }
+  const link = { x: 31.5, y: MAIN.y1, w: 7, d: MY(SUP.y0) - MAIN.y1, name: '연결부' }
+  const duct = { x: 32.5, y: MAIN.y1, w: 5, d: MY(SUP.y0) - MAIN.y1, name: '공동구', dashed: true }
+  return {
+    b1: [main, sup, duct],
+    f1: [main, sup, link],
+    f2: [main, sup, link],
+    roof: [main, sup, link],
+  }
+})()
+
+/** 배치도 도면 범위 — 건물 외곽 + 서측 옥외 유류탱크까지 여유 포함 */
+export const PLAN_BOUNDS = { x0: -17, y0: -7, x1: 112, y1: MY(SUP.y1) + 7 }
+
+function collectFloorPlan() {
+  const byFloor = { b1: [], f1: [], f2: [], roof: [] }
+  for (const term in ctx.groupReg) {
+    const acc = {}
+    ctx.groupReg[term].traverse((o) => {
+      // 흐름 패킷은 애니메이션으로 위치가 바뀌므로 제외
+      if (!o.isMesh || o.userData.flowParticle) return
+      const f = o.userData.floor
+      if (!f || !byFloor[f]) return
+      const kind = o.userData.flowPart ? 'flow' : 'solid'
+      const a = (acc[f] = acc[f] || {})
+      const b = (a[kind] = a[kind] || { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity, n: 0 })
+      const px = o.position.x + CX, py = o.position.z + CZ
+      if (px < b.x0) b.x0 = px
+      if (px > b.x1) b.x1 = px
+      if (py < b.y0) b.y0 = py
+      if (py > b.y1) b.y1 = py
+      b.n++
+    })
+    for (const f in acc) {
+      // 실장비(solid)가 있으면 그 범위를, 배관만 있는 계통은 배관 범위를 쓴다
+      const b = acc[f].solid || acc[f].flow
+      if (!b || !b.n) continue
+      byFloor[f].push({
+        term,
+        x: (b.x0 + b.x1) / 2,
+        y: (b.y0 + b.y1) / 2,
+        w: b.x1 - b.x0,
+        d: b.y1 - b.y0,
+        count: b.n,
+        pipeOnly: !acc[f].solid,
+      })
+    }
+  }
+  for (const f in byFloor) byFloor[f].sort((a, b) => a.y - b.y || a.x - b.x)
+  return byFloor
 }
 
 /* ═══ 층 아이솔레이션 고스트 쉘 — 타 층은 건물 외곽 실루엣 라인만 표시 ═══
