@@ -3,7 +3,6 @@ import Header from './components/Header.jsx'
 import Toolbar from './components/Toolbar.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Viewport from './components/Viewport.jsx'
-import Blueprint from './components/Blueprint.jsx'
 import { useAppStore } from './store/useAppStore.js'
 import singleHtml from './single/aidc-single.html?raw'
 
@@ -14,7 +13,6 @@ const DESIGN_H = 928
 export default function App() {
   const mode = useAppStore((s) => s.mode)
   const setMode = useAppStore((s) => s.setMode)
-  const blueprintOn = useAppStore((s) => s.blueprintOn)
   const shellRef = useRef(null)
 
   /* 단층 기준 레이아웃: 1908×928 캔버스를 min(w/1908, h/928) 배율로 스케일 */
@@ -55,7 +53,6 @@ export default function App() {
         <main className="stage">
           <Toolbar />
           <Viewport />
-          {blueprintOn && <Blueprint />}
         </main>
       </div>
     </div>

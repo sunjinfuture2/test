@@ -25,8 +25,6 @@ export default function Toolbar() {
   const toggleFlowMaster = useAppStore((s) => s.toggleFlowMaster)
   const labelsOn = useAppStore((s) => s.labelsOn)
   const toggleLabels = useAppStore((s) => s.toggleLabels)
-  const blueprintOn = useAppStore((s) => s.blueprintOn)
-  const toggleBlueprint = useAppStore((s) => s.toggleBlueprint)
   const requestReset = useAppStore((s) => s.requestReset)
 
   return (
@@ -70,15 +68,6 @@ export default function Toolbar() {
           onClick={toggleLabels}
         >
           라벨
-        </button>
-        <button
-          className={`label-toggle${blueprintOn ? ' on' : ''}`}
-          type="button"
-          aria-label="층별 장비 배치 설계도 열기 또는 닫기"
-          aria-pressed={blueprintOn}
-          onClick={toggleBlueprint}
-        >
-          설계도
         </button>
         <button className="reset-view" type="button" aria-label="3D 시점 초기화" onClick={requestReset}>
           <svg viewBox="0 0 40 40" aria-hidden="true">

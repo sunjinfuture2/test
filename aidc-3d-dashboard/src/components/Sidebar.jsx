@@ -1,10 +1,15 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/useAppStore.js'
+import { ctx } from '../scene/helpers.js'
 import { TERMS, CATS, CAT_ORDER, FLOORS } from '../data/terms.js'
 
 /**
  * 좌측 학습 패널 — 검색 · 선택 상세 · 계통별 용어 리스트.
  * 레퍼런스의 사이드바 구조(검색 룰라인, 상세 블록, 접이식 그룹)를 따른다.
+ *
+ * 하단 층 내비에서 층을 고르면 목록도 그 층에 배치된 장비만 남는다.
+ * 소속 층은 빌드된 씬에서 뽑은 ctx.floorTerms 기준 — 여러 층에 걸친 설비는
+ * 해당 층 모두에서 보인다. 활성 층을 다시 누르면 전체 목록으로 돌아온다.
  */
 export default function Sidebar() {
   const selected = useAppStore((s) => s.selected)
@@ -20,10 +25,16 @@ export default function Sidebar() {
 
   const q = query.trim().toLowerCase()
 
+  /* 층 필터 — 씬이 아직 안 만들어졌으면 필터하지 않는다 */
+  const onFloor = floor !== 'all' && ctx.floorTerms
+    ? new Set(ctx.floorTerms[floor] || [])
+    : null
+
   function idsFor(cat) {
     return Object.keys(TERMS).filter((id) => {
       const t = TERMS[id]
       if (t.cat !== cat) return false
+      if (onFloor && !onFloor.has(id)) return false
       if (q && (t.name + t.en).toLowerCase().indexOf(q) === -1) return false
       return true
     })
@@ -39,7 +50,7 @@ export default function Sidebar() {
     // 목록이 패널을 다 채울 때(스크롤 생길 때)만 층 내비 위 구분선 표시
     setOverflowing(el.scrollHeight > el.clientHeight + 2)
   }
-  useEffect(() => { updateFades() }, [query, selected, collapsed])
+  useEffect(() => { updateFades() }, [query, selected, collapsed, floor])
   useEffect(() => {
     const el = bodyRef.current
     if (!el) return
@@ -115,10 +126,19 @@ export default function Sidebar() {
         )}
 
         <div className="list">
+          {floor !== 'all' && (
+            <div className="floor-scope">
+              <span className="fs-label">{FLOORS[floor]} 배치 장비</span>
+              <button type="button" className="fs-clear" onClick={() => setFloor('all')}>
+                전체 보기
+              </button>
+            </div>
+          )}
           {CAT_ORDER.map((cat) => {
             const ids = idsFor(cat)
             if (!ids.length) return null
-            const isCollapsed = !q && collapsed[cat]
+            /* 검색·층 필터 중에는 결과가 바로 보이도록 그룹을 펼친다 */
+            const isCollapsed = !q && floor === 'all' && collapsed[cat]
             return (
               <div key={cat}>
                 <div
@@ -142,7 +162,13 @@ export default function Sidebar() {
               </div>
             )
           })}
-          {!anyResult && <div className="empty">일치하는 용어가 없습니다.</div>}
+          {!anyResult && (
+            <div className="empty">
+              {onFloor && !q
+                ? `${FLOORS[floor]}에 배치된 장비가 없습니다.`
+                : '일치하는 용어가 없습니다.'}
+            </div>
+          )}
         </div>
       </div>
 
