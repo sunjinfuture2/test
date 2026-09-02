@@ -380,7 +380,7 @@ export default function Viewport() {
        낮춰, 선택한 장비만 색과 윤곽을 유지하도록 한다. 벽·슬래브·지형은
        렌더 루프가 매 프레임 불투명도를 몰아가므로 여기서 값을 잡아도
        덮이는데, 대신 루프 쪽 목표값에 FOCUS_STRUCT_OP를 곱해 함께 낮춘다. */
-    const FOCUS_WHITE = 0.93       // 선택 외 색 → 흰색 블렌드 비율
+    const FOCUS_WHITE = 0.95       // 선택 외 색 → 흰색 블렌드 비율
     const FOCUS_OP = 0.5           // 선택 외 불투명도 배율
     const FOCUS_STRUCT_OP = 0.38   // 벽·슬래브 등 구조체 불투명도 배율
     let focusActive = false
