@@ -411,12 +411,53 @@ export default function Viewport() {
     const FOCUS_EXT_EDGE = 0.72    // 건물 외벽 윤곽선 불투명도
     const FOCUS_SOFT_EDGE = 0.12   // 칸막이·슬래브·지형 윤곽선 불투명도
     const FOCUS_STRUCT_OP = 0.12   // 벽·슬래브 등 구조체 면 불투명도 배율
+
+    /* ── 포커스용 보조 윤곽선 ────────────────────────────────────
+       box()만 addEdges를 호출하므로 cylY·cylDir·noedge 박스로 이루어진 설비
+       (유류탱크는 전부, GIS는 모선·부싱·캐비닛)는 윤곽선이 아예 없다. 면만으로는
+       다른 장비처럼 읽히지 않으므로, 빌드 후 한 번 만들어 두고 포커스 중에만 켠다.
+       작은 디테일까지 그리면 어지러워지므로 일정 크기 이상만 대상으로 한다. */
+    const FOCUS_EDGE_MIN_R = 0.55  // 지오메트리 바운딩스피어 반경 하한 (도면 m)
+    const focusEdges = []
+    for (const term in groupReg) {
+      const targets = []
+      groupReg[term].traverse((o) => {
+        if (!o.isMesh || !o.geometry || o.userData.hasEdge) return
+        if (o.userData.flowPart || o.userData.floorTop || o.userData.selectionOutline) return
+        o.geometry.computeBoundingSphere()
+        const bs = o.geometry.boundingSphere
+        if (!bs || bs.radius < FOCUS_EDGE_MIN_R) return
+        targets.push(o)
+      })
+      for (let i = 0; i < targets.length; i++) {
+        const o = targets[i]
+        /* 28° 임계 — 매끄러운 원통·구의 측면은 걸러지고 림·모서리만 남는다 */
+        const ls = new THREE.LineSegments(
+          new THREE.EdgesGeometry(o.geometry, 28),
+          new THREE.LineBasicMaterial({
+            color: FOCUS_EDGE_COLOR.clone(), transparent: true,
+            opacity: FOCUS_EDGE_OP, depthWrite: false,
+          }),
+        )
+        ls.material.userData = { baseOp: FOCUS_EDGE_OP }
+        ls.position.copy(o.position)
+        ls.quaternion.copy(o.quaternion)
+        ls.scale.copy(o.scale)
+        ls.userData.focusEdge = true
+        ls.userData.floor = o.userData.floor
+        ls.visible = false
+        o.parent.add(ls)
+        focusEdges.push({ ls, src: o })
+      }
+    }
+
     let focusActive = false
     let focusSaved = []
     let focusHidden = []
     function restoreFocus() {
       for (let i = 0; i < focusHidden.length; i++) focusHidden[i].visible = true
       focusHidden = []
+      for (let i = 0; i < focusEdges.length; i++) focusEdges[i].ls.visible = false
       for (let i = 0; i < focusSaved.length; i++) {
         const f = focusSaved[i]
         f.material.color.copy(f.color)
@@ -487,6 +528,13 @@ export default function Viewport() {
         o.material.depthWrite = false
         focusSaved.push(entry)
       })
+      /* 윤곽선이 없는 설비의 보조 윤곽선 — 선택된 그룹 외에서만 켠다 */
+      for (let i = 0; i < focusEdges.length; i++) {
+        const fe = focusEdges[i]
+        let inKeep = false
+        for (let p = fe.src; p; p = p.parent) if (p === keep) { inKeep = true; break }
+        fe.ls.visible = !inKeep && fe.src.visible && !fe.src.userData._floorHidden
+      }
       /* 장식물은 흰색으로 남기지 않고 감춘다 (층·계통 필터로 이미 숨은 것은 건드리지 않음) */
       for (let i = 0; i < decorObjects.length; i++) {
         const o = decorObjects[i]
@@ -724,6 +772,13 @@ export default function Viewport() {
            내용을 가려, 켜지 않는다 (shellFloor !== floor 로 바꾸면 되살아난다) */
         if (o.userData.ghostShell) {
           o.visible = floor !== 'all' && o.userData.shellFloor === 'ground'
+          return
+        }
+        /* 포커스용 보조 윤곽선: 평소엔 숨김 — 층 판정만 갱신해 둔다 */
+        if (o.userData.focusEdge) {
+          const hid = floor !== 'all' && o.userData.floor && o.userData.floor !== floor
+          o.userData._floorHidden = !!hid
+          o.visible = focusActive && !hid
           return
         }
         const base = (o.material.userData && o.material.userData.baseOp !== undefined) ? o.material.userData.baseOp : 1
