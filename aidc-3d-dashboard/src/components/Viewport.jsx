@@ -383,12 +383,15 @@ export default function Viewport() {
     /* 선택 외 면은 램버트 음영을 지워 '회색'이 아닌 평평한 흰색으로 만들고
        불투명도를 크게 낮춘다. 형태는 아주 옅은 윤곽선만 남겨 맥락을 준다. */
     /* 면은 흰 배경에 묻혀 불투명도를 올려도 보이지 않는다 — 형태는 전적으로
-       윤곽선이 만든다. 그래서 '조금만 보이게'는 선 쪽 값으로 조절한다. */
-    const FOCUS_LINE_COLOR = new THREE.Color('#c2c6cb') // 선택 외 장비 윤곽선 색
+       윤곽선이 만든다. 그래서 선 쪽을 3단으로 나눈다:
+         진하게 — 장비 윤곽선, 건물 외벽선 (형태를 읽는 기준)
+         연하게 — 칸막이·슬래브·지형선 (있다는 것만 알 정도) */
+    const FOCUS_EDGE_COLOR = new THREE.Color('#a9aeb4') // 선택 외 장비 윤곽선 색
     const FOCUS_OP = 0.16          // 선택 외 면 불투명도 배율
-    const FOCUS_LINE_OP = 0.62     // 선택 외 장비 윤곽선 불투명도 배율
+    const FOCUS_EDGE_OP = 0.5      // 장비 윤곽선 불투명도 (절대값)
+    const FOCUS_EXT_EDGE = 0.72    // 건물 외벽 윤곽선 불투명도
+    const FOCUS_SOFT_EDGE = 0.12   // 칸막이·슬래브·지형 윤곽선 불투명도
     const FOCUS_STRUCT_OP = 0.12   // 벽·슬래브 등 구조체 면 불투명도 배율
-    const FOCUS_STRUCT_EDGE = 0.34 // 벽·슬래브 윤곽선 불투명도 (건물 외곽 유지)
     let focusActive = false
     let focusSaved = []
     function restoreFocus() {
@@ -428,13 +431,17 @@ export default function Viewport() {
         const base = (o.material.userData && o.material.userData.baseOp !== undefined)
           ? o.material.userData.baseOp : o.material.opacity
         const isLine = o.isLineSegments === true || o.isLine === true
-        if (isLine && o.userData.structure) {
-          /* 건물 구조 라인(외벽·슬래브)은 원래 색을 지켜 옅은 외곽선으로 남긴다.
-             불투명도는 렌더 루프가 FOCUS_STRUCT_EDGE로 몰아간다. */
+        if (isLine && o.userData.interiorWall) {
+          /* 칸막이선 — 렌더 루프가 건드리지 않으므로 여기서 연하게 낮춘다 */
+          o.material.opacity = Math.min(1, base * FOCUS_SOFT_EDGE)
+        } else if (isLine && o.userData.structure) {
+          /* 외벽·슬래브·지형선은 원래 색을 지키고, 불투명도는 렌더 루프가
+             FOCUS_EXT_EDGE / FOCUS_SOFT_EDGE로 나눠 몰아간다 */
         } else if (isLine) {
-          /* 장비는 옅은 회색 윤곽선만 남겨 형태를 알아볼 수 있게 한다 */
-          o.material.color.copy(FOCUS_LINE_COLOR)
-          o.material.opacity = Math.min(1, base * FOCUS_LINE_OP)
+          /* 장비 윤곽선 — 형태를 읽는 기준이라 진하게.
+             재질별 baseOp(0.55 등)에 곱하면 묻히므로 절대값으로 잡는다 */
+          o.material.color.copy(FOCUS_EDGE_COLOR)
+          o.material.opacity = FOCUS_EDGE_OP
         } else {
           /* 램버트 음영이 흰 면을 회색으로 떨어뜨리므로 발광으로 상쇄해
              각도와 무관하게 평평한 흰색이 되게 한다 (유체 패킷도 동일) */
@@ -946,7 +953,9 @@ export default function Viewport() {
         wf.m.material.transparent = true
         wf.m.material.opacity += (tgt - wf.m.material.opacity) * 0.18
         if (!wf.e.material.userData._ghost)
-          wf.e.material.opacity = focusActive ? FOCUS_STRUCT_EDGE
+          /* 포커스 중: 건물 외벽선은 진하게, 지형(대지) 외곽선은 연하게 */
+          wf.e.material.opacity = focusActive
+            ? (wf.m.userData.terrain ? FOCUS_SOFT_EDGE : FOCUS_EXT_EDGE)
             : wf.m.material.opacity > 0.4 ? wf.e.material.userData.baseOp
             : (floorIso && !wf.m.userData._dimmed ? 0.3 : 0)
       }
@@ -966,7 +975,7 @@ export default function Viewport() {
         s.m.material.opacity += (tgt - s.m.material.opacity) * 0.15
         s.e.material.transparent = true
         if (!s.e.material.userData || !s.e.material.userData._ghost)
-          s.e.material.opacity = focusActive ? FOCUS_STRUCT_EDGE : (s.m.material.opacity > 0.4 ? 1 : 0)
+          s.e.material.opacity = focusActive ? FOCUS_SOFT_EDGE : (s.m.material.opacity > 0.4 ? 1 : 0)
         s.top.material.opacity = Math.min(s.top.material.userData.baseOp, s.m.material.opacity)
       }
       /* 유체 패킷 */
