@@ -148,7 +148,7 @@ export default function Viewport() {
       labelTimer = setTimeout(() => {
         host.classList.remove('labels-moving')
         layoutLabels(true)
-      }, 260)
+      }, 160)
     }
 
     function layoutLabels(force) {
@@ -306,21 +306,66 @@ export default function Viewport() {
         }
         return total
       }
+      /* ── 배치 최적화 ─────────────────────────────────────────────
+         교환 후보마다 assignmentScore를 통째로 다시 계산하면 O(패스 × n⁴)이라
+         라벨 28개에서 1.5초가 걸린다(13개는 11ms — n에 따라 폭발한다).
+         교환은 두 항목의 슬롯만 뒤바꾸므로, 달라지는 항은 그 둘이 관련된 것뿐이다.
+         슬롯 겹침 항은 슬롯 집합이 그대로라 아예 불변이므로 델타에서 빠진다.
+         → 관련 항만 더해 차이를 구하면 교환당 O(n)이 된다. */
+      const nAsg = assigned.length
+      const ends = new Array(nAsg)
+      for (let i = 0; i < nAsg; i++) ends[i] = endpoint(assigned[i].slot, assigned[i].item)
+      function soloTerm(i) {
+        const ai = assigned[i].item, ae = ends[i]
+        const avx = ai.sx - cx2, avy = ai.sy - cy2, al = Math.max(1, Math.hypot(avx, avy))
+        const evx = ae.x - cx2, evy = ae.y - cy2, el = Math.max(1, Math.hypot(evx, evy))
+        return Math.hypot(ai.sx - ae.x, ai.sy - ae.y)
+          + (1 - (avx / al * evx / el + avy / al * evy / el)) * 700
+          + (assigned[i].slot.modelPenalty || 0)
+      }
+      function hitTerm(i, r) {
+        const ai = assigned[i].item
+        return segmentHitsText({ x: ai.sx, y: ai.sy }, ends[i], assigned[r].slot) ? 45000 : 0
+      }
+      function crossTerm(i, j) {
+        const ai = assigned[i].item, aj = assigned[j].item
+        return cross({ x: ai.sx, y: ai.sy }, ends[i], { x: aj.sx, y: aj.sy }, ends[j]) ? 140000 : 0
+      }
+      /* p 또는 q가 관련된 항의 합 (겹침 항 제외 — 교환에 불변) */
+      function affectedScore(p, q) {
+        let t = soloTerm(p) + soloTerm(q)
+        for (let r = 0; r < nAsg; r++) {
+          if (r !== p) { t += hitTerm(p, r); t += crossTerm(r, p) }
+          if (r !== q) { t += hitTerm(q, r); t += crossTerm(r, q) }
+          if (r !== p && r !== q) { t += hitTerm(r, p); t += hitTerm(r, q) }
+        }
+        return t - crossTerm(p, q)   // 위에서 두 번 더해진 (p,q) 쌍 보정
+      }
+      function swapSlots(p, q) {
+        const hold = assigned[p].slot; assigned[p].slot = assigned[q].slot; assigned[q].slot = hold
+        ends[p] = endpoint(assigned[p].slot, assigned[p].item)
+        ends[q] = endpoint(assigned[q].slot, assigned[q].item)
+      }
       let currentScore = assignmentScore(assigned)
+      /* 델타로 줄여도 교환 후보 자체는 O(n²)이므로, 라벨이 지금보다 크게 늘 때를
+         대비한 안전장치로 상한을 둔다. 현재 28개에서는 180ms 안에 끝나 걸리지
+         않으므로 배치 결과는 종전과 동일하다. */
+      const optDeadline = performance.now() + 250
       for (let pass = 0; pass < 18; pass++) {
         let bestSwapI = -1, bestSwapJ = -1, bestSwapScore = currentScore
-        for (let si = 0; si < assigned.length - 1; si++) for (let sj = si + 1; sj < assigned.length; sj++) {
-          let hold = assigned[si].slot; assigned[si].slot = assigned[sj].slot; assigned[sj].slot = hold
-          const trial = assignmentScore(assigned)
-          hold = assigned[si].slot; assigned[si].slot = assigned[sj].slot; assigned[sj].slot = hold
+        for (let si = 0; si < nAsg - 1; si++) for (let sj = si + 1; sj < nAsg; sj++) {
+          const before = affectedScore(si, sj)
+          swapSlots(si, sj)
+          const trial = currentScore + (affectedScore(si, sj) - before)
+          swapSlots(si, sj)
           if (trial < bestSwapScore - 0.5) { bestSwapScore = trial; bestSwapI = si; bestSwapJ = sj }
         }
         if (bestSwapI < 0) break
-        const finalHold = assigned[bestSwapI].slot
-        assigned[bestSwapI].slot = assigned[bestSwapJ].slot; assigned[bestSwapJ].slot = finalHold
-        assigned[bestSwapI].end = endpoint(assigned[bestSwapI].slot, assigned[bestSwapI].item)
-        assigned[bestSwapJ].end = endpoint(assigned[bestSwapJ].slot, assigned[bestSwapJ].item)
+        swapSlots(bestSwapI, bestSwapJ)
+        assigned[bestSwapI].end = ends[bestSwapI]
+        assigned[bestSwapJ].end = ends[bestSwapJ]
         currentScore = bestSwapScore
+        if (performance.now() > optDeadline) break
       }
       const selected = useAppStore.getState().selected
       for (let z2 = 0; z2 < assigned.length; z2++) {
@@ -558,16 +603,50 @@ export default function Viewport() {
     }
     function clearSelectionOutline() { clearOutlineList(selectionOutline) }
     function clearHoverOutline() { clearOutlineList(hoverOutline) }
-    function makeThickEdge(parent, a, b, radius, material, bucket) {
-      const d = new THREE.Vector3().subVectors(b, a), len = d.length()
-      if (len < 0.01) return
-      const edge = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, len, 6, 1, false), material.clone())
-      edge.position.copy(a).add(b).multiplyScalar(0.5)
-      edge.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())
-      edge.userData.selectionOutline = true
-      edge.renderOrder = 80
-      parent.add(edge)
-      bucket.push(edge)
+    /* 굵은 검은 선을 간선마다 실린더 mesh로 만들면 항온항습실 기준 6,300개가
+       생겨(재질 clone 포함) 100ms 넘게 멈추고, 호버가 유지되는 동안 그만큼
+       드로우콜이 늘어난다. 정점을 하나의 버퍼에 직접 채워 mesh 한 개로 그린다. */
+    const OUTLINE_SEG = 6
+    const _oa = new THREE.Vector3(), _ob = new THREE.Vector3(), _od = new THREE.Vector3()
+    const _ou = new THREE.Vector3(), _ov = new THREE.Vector3(), _oref = new THREE.Vector3()
+    function buildTubeMesh(segs, radius, bucket) {
+      const n = segs.length / 6
+      if (!n) return
+      const arr = new Float32Array(n * OUTLINE_SEG * 6 * 3)
+      let k = 0
+      for (let e = 0; e < n; e++) {
+        const o6 = e * 6
+        _oa.set(segs[o6], segs[o6 + 1], segs[o6 + 2])
+        _ob.set(segs[o6 + 3], segs[o6 + 4], segs[o6 + 5])
+        _od.subVectors(_ob, _oa).normalize()
+        _oref.set(0, 1, 0)
+        if (Math.abs(_od.y) > 0.9) _oref.set(1, 0, 0)
+        _ou.crossVectors(_od, _oref).normalize().multiplyScalar(radius)
+        _ov.crossVectors(_od, _ou).normalize().multiplyScalar(radius)
+        for (let sg = 0; sg < OUTLINE_SEG; sg++) {
+          const t0 = (sg / OUTLINE_SEG) * Math.PI * 2, t1 = ((sg + 1) / OUTLINE_SEG) * Math.PI * 2
+          const c0 = Math.cos(t0), s0 = Math.sin(t0), c1 = Math.cos(t1), s1 = Math.sin(t1)
+          const ax = _ou.x * c0 + _ov.x * s0, ay = _ou.y * c0 + _ov.y * s0, az = _ou.z * c0 + _ov.z * s0
+          const bx = _ou.x * c1 + _ov.x * s1, by = _ou.y * c1 + _ov.y * s1, bz = _ou.z * c1 + _ov.z * s1
+          arr[k++] = _oa.x + ax; arr[k++] = _oa.y + ay; arr[k++] = _oa.z + az
+          arr[k++] = _ob.x + ax; arr[k++] = _ob.y + ay; arr[k++] = _ob.z + az
+          arr[k++] = _ob.x + bx; arr[k++] = _ob.y + by; arr[k++] = _ob.z + bz
+          arr[k++] = _oa.x + ax; arr[k++] = _oa.y + ay; arr[k++] = _oa.z + az
+          arr[k++] = _ob.x + bx; arr[k++] = _ob.y + by; arr[k++] = _ob.z + bz
+          arr[k++] = _oa.x + bx; arr[k++] = _oa.y + by; arr[k++] = _oa.z + bz
+        }
+      }
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.BufferAttribute(arr, 3))
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+        color: 0x000000, depthTest: true, depthWrite: false,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      }))
+      mesh.userData.selectionOutline = true
+      mesh.renderOrder = 80
+      mesh.frustumCulled = false
+      scene.add(mesh)
+      bucket.push(mesh)
     }
     function applySelectionOutline(term) {
       clearSelectionOutline()
@@ -589,17 +668,25 @@ export default function Viewport() {
         maxDiag = Math.max(maxDiag, diag)
         meshes.push({ mesh: o, diag })
       })
-      const radius = Math.max(0.06, Math.min(0.13, maxDiag * 0.0065))
-      const lineMat = new THREE.MeshBasicMaterial({ color: 0x000000, depthTest: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+      /* 합쳐진 mesh는 씬 루트에 놓이므로 두께도 월드 기준으로 환산한다
+         (기존에는 부모 mesh의 자식이라 facilityRoot 스케일을 물려받았다) */
+      const radius = Math.max(0.06, Math.min(0.13, maxDiag * 0.0065)) * (FS.x + FS.y + FS.z) / 3
+      g.updateMatrixWorld(true)
+      const segs = []
       for (let m = 0; m < meshes.length; m++) {
         const o = meshes[m].mesh, type = o.geometry.type || ''
         // 그룹 안의 긴 부속(트레이·덕트) 때문에 본체가 탈락하지 않게 절대 하한과 병행
         if (meshes[m].diag < Math.min(2.2, maxDiag * 0.26) || (!/BoxGeometry|CylinderGeometry/.test(type))) continue
         const edges = new THREE.EdgesGeometry(o.geometry, 24), pos = edges.attributes.position
-        for (let i = 0; i < pos.count; i += 2) makeThickEdge(o, new THREE.Vector3().fromBufferAttribute(pos, i), new THREE.Vector3().fromBufferAttribute(pos, i + 1), radius, lineMat, bucket)
+        for (let i = 0; i < pos.count; i += 2) {
+          _oa.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld)
+          _ob.fromBufferAttribute(pos, i + 1).applyMatrix4(o.matrixWorld)
+          if (_oa.distanceToSquared(_ob) < 0.0001) continue
+          segs.push(_oa.x, _oa.y, _oa.z, _ob.x, _ob.y, _ob.z)
+        }
         edges.dispose()
       }
-      lineMat.dispose()
+      buildTubeMesh(segs, radius, bucket)
     }
     function convexHull2D(points) {
       if (points.length < 3) return points
@@ -822,9 +909,12 @@ export default function Viewport() {
       layoutLabels(true)
       syncLabels()
       syncFlowUI()
-      /* 위 traverse가 불투명도를 base로 되돌리므로 선택 중이면 다시 입힌다 */
+      /* 위 traverse가 불투명도를 base로 되돌리므로 선택 중이면 다시 입힌다.
+         아웃라인은 원본 mesh의 자식이 아니라 씬 루트에 있어 부모를 따라
+         숨지 않으므로, 숨김 대상이 바뀌면 다시 만들어야 한다 */
+      clearHoverOutline()
       const selNow = useAppStore.getState().selected
-      if (selNow && groupReg[selNow]) applyFocus(selNow)
+      if (selNow && groupReg[selNow]) { applyFocus(selNow); applySelectionOutline(selNow) }
     }
 
     /* ── Flow 토글 (레퍼런스 syncFlowUI 포팅) ── */
