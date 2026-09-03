@@ -42,6 +42,7 @@ export function buildFacility(scene) {
   buildRoof()
   buildDetailPlus()
   buildGhostShells()
+  buildEnvelopeLines()
   buildFlows()
   ctx.floorTerms = collectFloorTerms()
 
@@ -117,6 +118,36 @@ function buildGhostShells() {
   gnd.userData.shellFloor = 'ground'
   gnd.visible = false
   g.add(gnd)
+}
+
+/* ═══ 선택 포커스용 건물 외곽선 ═══════════════════════════════
+   외벽은 두께 1.1m의 박스라 면마다 윤곽선이 생겨 모서리가 서너 줄로 겹쳐
+   보인다. 층별 외곽 박스 와이어프레임을 한 겹만 따로 두고, 포커스 중에는
+   벽 윤곽선 대신 이것만 켜서 모서리가 한 줄로 떨어지게 한다. */
+function buildEnvelopeLines() {
+  setFloor(null)
+  const g = G(null, null)
+  const bands = { b1: [0, 13.5], f1: [13.5, 27], f2: [27, 40.5], roof: [40.5, 41.7] }
+  for (const f in bands) {
+    const z0 = MZS(bands[f][0]), z1 = MZS(bands[f][1])
+    for (const r of [MAIN, SUP]) {
+      const geo = new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, r.y1 - r.y0)
+      const ls = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color: new THREE.Color('#9aa0a6'), transparent: true, opacity: 0.7, depthWrite: false }),
+      )
+      ls.material.userData = { baseOp: 0.7 }
+      ls.position.set(
+        r.x0 + (r.x1 - r.x0) / 2 - CX,
+        z0 + (z1 - z0) / 2,
+        r.y0 + (r.y1 - r.y0) / 2 - CZ,
+      )
+      ls.userData.envelope = true
+      ls.userData.floor = f
+      ls.visible = false
+      g.add(ls)
+    }
+  }
 }
 
 /* ═══════════════ 대지 · 지형 · 주차 · 외부 동선 ═══════════════ */
