@@ -138,8 +138,11 @@ function buildFocusFloors() {
   setFloor(null)
   const g = G(null, null)
   const CONN = { x0: 31.5, x1: 38.5, y0: MAIN.y1, y1: SUP.y0 }
+  /* 1층 바닥은 지반 레벨(GL)과 같은 높이다. 건물 밖 옥외 설비도 이 면 위에
+     놓이므로, 1층만은 건물별로 쪼개지 않고 대지 전체를 한 장으로 깐다 */
+  const SITE = { x0: -14, x1: 138, y0: -10, y1: 116 }
   for (const f in LV) {
-    for (const r of [MAIN, SUP, CONN]) {
+    for (const r of (f === 'f1' ? [SITE] : [MAIN, SUP, CONN])) {
       const geo = new THREE.PlaneGeometry(r.x1 - r.x0, r.y1 - r.y0).rotateX(-Math.PI / 2)
       const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
         color: new THREE.Color(FLOOR_PLATE_COLOR), side: THREE.DoubleSide,
