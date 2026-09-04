@@ -434,6 +434,7 @@ export function slab(x, y, z, w, d, th, floorId, hexBody, hexTop, baseOp) {
   const m = new THREE.Mesh(geo, lam(hexBody || '#E9EBED', op))
   m.material.depthWrite = false
   m.userData.structureMesh = true
+  m.userData.slabMesh = true   // 선택 포커스: 층 구분용으로 벽과 다르게 칠한다
   m.position.set(x + w / 2 - CX, Z - TH / 2, y + d / 2 - CZ)
   g.add(m)
   registerFloor(m)

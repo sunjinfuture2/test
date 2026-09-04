@@ -444,13 +444,24 @@ export default function Viewport() {
        윤곽선이 만든다. 그래서 선 쪽을 3단으로 나눈다:
          진하게 — 장비 윤곽선, 건물 외벽선 (형태를 읽는 기준)
          연하게 — 칸막이·슬래브·지형선 (있다는 것만 알 정도) */
+    /* 램버트 음영을 없애고 재질을 지정한 색으로 평평하게 칠한다.
+       발광을 지원하지 않는 재질(Basic 등)은 색을 그대로 쓴다 */
+    function flatten(mat, color) {
+      if (mat.emissive) {
+        mat.color.setRGB(0, 0, 0)
+        mat.emissive.copy(color)
+      } else {
+        mat.color.copy(color)
+      }
+    }
     const FOCUS_EDGE_COLOR = new THREE.Color('#a9aeb4') // 선택 외 장비 윤곽선 색
-    /* 선택 외 장비 면은 순백이 아니라 아주 옅은 회색으로 둔다 —
-       cylY·cylDir은 윤곽선을 만들지 않으므로(box만 addEdges 호출) 원통으로만
-       이루어진 설비(유류탱크·축열조·펌프 등)는 면이 흰색이면 통째로 사라진다.
-       실루엣이 남아야 형태를 알 수 있다. 배관·흐름 패킷은 제외(흰색 유지). */
-    const FOCUS_TERM_COLOR = new THREE.Color('#c4cad1')
-    const FOCUS_TERM_OP = 0.6      // 선택 외 장비 면 불투명도
+    /* 선택 외 장비(배관 루프 포함) 면 — 아주 연한 파랑으로 칠하고 불투명하게
+       둔다. 반투명이면 내부 부속까지 비쳐 형태가 지저분해진다. */
+    const FOCUS_TERM_COLOR = new THREE.Color('#cfdcef')
+    const FOCUS_TERM_OP = 1        // 불투명 — 내부가 비쳐 보이지 않게
+    /* 층 바닥판 — 층이 구분될 정도의 연한 회색 */
+    const FOCUS_SLAB_COLOR = new THREE.Color('#c9ced6')
+    const FOCUS_SLAB_OP = 0.5
     const FOCUS_OP = 0.16          // 선택 외 면 불투명도 배율
     const FOCUS_EDGE_OP = 0.5      // 장비 윤곽선 불투명도 (절대값)
     const FOCUS_EXT_EDGE = 0.72    // 건물 외벽 윤곽선 불투명도
@@ -462,6 +473,10 @@ export default function Viewport() {
        (유류탱크는 전부, GIS는 모선·부싱·캐비닛)는 윤곽선이 아예 없다. 면만으로는
        다른 장비처럼 읽히지 않으므로, 빌드 후 한 번 만들어 두고 포커스 중에만 켠다.
        작은 디테일까지 그리면 어지러워지므로 일정 크기 이상만 대상으로 한다. */
+    /* 건물 외곽선 — buildFacility가 층별로 한 겹씩 만들어 둔 것 */
+    const envelopeLines = []
+    facilityRoot.traverse((o) => { if (o.userData.envelope) envelopeLines.push(o) })
+
     const FOCUS_EDGE_MIN_R = 0.55  // 지오메트리 바운딩스피어 반경 하한 (도면 m)
     const focusEdges = []
     for (const term in groupReg) {
@@ -503,6 +518,7 @@ export default function Viewport() {
       for (let i = 0; i < focusHidden.length; i++) focusHidden[i].visible = true
       focusHidden = []
       for (let i = 0; i < focusEdges.length; i++) focusEdges[i].ls.visible = false
+      for (let i = 0; i < envelopeLines.length; i++) envelopeLines[i].visible = false
       for (let i = 0; i < focusSaved.length; i++) {
         const f = focusSaved[i]
         f.material.color.copy(f.color)
@@ -521,6 +537,7 @@ export default function Viewport() {
       const whiteTarget = new THREE.Color('#ffffff')
       scene.traverse((o) => {
         if (!o.material || !o.material.color || o.userData.selectionOutline) return
+        if (o.userData.envelope) return   // 건물 외곽선은 자체 색·불투명도 유지
         /* 선택 그룹 제외 + 다른 용어 그룹(=선택 가능한 장비)인지 판별 */
         let inTerm = false
         for (let p = o; p; p = p.parent) {
@@ -555,14 +572,23 @@ export default function Viewport() {
              재질별 baseOp(0.55 등)에 곱하면 묻히므로 절대값으로 잡는다 */
           o.material.color.copy(FOCUS_EDGE_COLOR)
           o.material.opacity = FOCUS_EDGE_OP
-        } else if (inTerm && !o.userData.flowPart) {
-          /* 다른 장비 면 — 옅은 회색 실루엣으로 남긴다 (원통 설비도 보이도록).
-             발광을 같은 색으로 넣어 각도에 따라 어두워지지 않게 한다 */
-          o.material.color.copy(FOCUS_TERM_COLOR)
-          if (o.material.emissive) o.material.emissive.copy(FOCUS_TERM_COLOR)
+        } else if (inTerm) {
+          /* 다른 장비 면 (배관 루프 포함) — 연한 파랑 불투명.
+             면 색을 검게 두고 발광만 목표색으로 주면 조명·각도와 무관하게
+             정확히 그 색으로 평평하게 칠해진다 (발광을 색과 같이 주면
+             확산광이 더해져 흰색으로 날아간다) */
+          flatten(o.material, FOCUS_TERM_COLOR)
           o.material.opacity = FOCUS_TERM_OP
+          o.material.transparent = FOCUS_TERM_OP < 1
+          o.material.depthWrite = FOCUS_TERM_OP >= 1
+          focusSaved.push(entry)
+          return
+        } else if (o.userData.slabMesh) {
+          /* 층 바닥판 — 연한 회색으로 층 경계를 보이게 한다
+             (불투명도는 렌더 루프가 FOCUS_SLAB_OP로 몰아간다) */
+          flatten(o.material, FOCUS_SLAB_COLOR)
         } else {
-          /* 구조체·배관·흐름 패킷 — 램버트 음영을 발광으로 상쇄해
+          /* 벽·지형 등 나머지 구조체 — 램버트 음영을 발광으로 상쇄해
              각도와 무관하게 평평한 흰색이 되게 한다 */
           o.material.color.set(whiteTarget)
           if (o.material.emissive) o.material.emissive.set(whiteTarget)
@@ -586,6 +612,20 @@ export default function Viewport() {
         if (!o.visible) continue
         o.visible = false
         focusHidden.push(o)
+      }
+      /* 흐름 패킷은 선택 중에는 흐르지 않아도 되므로 감춘다 */
+      for (let f = 0; f < flows.length; f++) {
+        const dots = flows[f].dots
+        for (let d = 0; d < dots.length; d++) {
+          if (!dots[d].visible) continue
+          dots[d].visible = false
+          focusHidden.push(dots[d])
+        }
+      }
+      /* 건물 외곽선 — 벽 윤곽선 대신 층별 한 겹만 켠다 */
+      for (let i = 0; i < envelopeLines.length; i++) {
+        const el = envelopeLines[i]
+        el.visible = !el.userData._floorHidden
       }
       focusActive = true
     }
@@ -861,7 +901,13 @@ export default function Viewport() {
           o.visible = floor !== 'all' && o.userData.shellFloor === 'ground'
           return
         }
-        /* 포커스용 보조 윤곽선: 평소엔 숨김 — 층 판정만 갱신해 둔다 */
+        /* 건물 외곽선·포커스 보조 윤곽선: 평소엔 숨김 — 층 판정만 갱신해 둔다 */
+        if (o.userData.envelope) {
+          const hid = floor !== 'all' && o.userData.floor !== floor
+          o.userData._floorHidden = !!hid
+          o.visible = focusActive && !hid
+          return
+        }
         if (o.userData.focusEdge) {
           const hid = floor !== 'all' && o.userData.floor && o.userData.floor !== floor
           o.userData._floorHidden = !!hid
@@ -1138,9 +1184,11 @@ export default function Viewport() {
         wf.m.material.transparent = true
         wf.m.material.opacity += (tgt - wf.m.material.opacity) * 0.18
         if (!wf.e.material.userData._ghost)
-          /* 포커스 중: 건물 외벽선은 진하게, 지형(대지) 외곽선은 연하게 */
+          /* 포커스 중: 외벽 윤곽선은 끄고 건물 외곽선(envelope)이 대신한다 —
+             벽이 두께 있는 박스라 면마다 선이 생겨 모서리가 여러 줄로 겹친다.
+             지형(대지) 외곽선만 연하게 남긴다 */
           wf.e.material.opacity = focusActive
-            ? (wf.m.userData.terrain ? FOCUS_SOFT_EDGE : FOCUS_EXT_EDGE)
+            ? (wf.m.userData.terrain ? FOCUS_SOFT_EDGE : 0)
             : wf.m.material.opacity > 0.4 ? wf.e.material.userData.baseOp
             : (floorIso && !wf.m.userData._dimmed ? 0.3 : 0)
       }
@@ -1155,12 +1203,13 @@ export default function Viewport() {
         else if (isoFloor !== 'all' && s.floor === isoFloor) tgt = 0.97  // 선택 층의 바닥판은 흰 플레이트로
         else if (selZ < s.zTop - 1) tgt = 0.08
         else if (s.floor === 'roof' && sph.pol < 0.62) tgt = 0.1
-        if (focusActive) tgt *= FOCUS_STRUCT_OP
+        if (focusActive) tgt = FOCUS_SLAB_OP   // 층 구분용 연회색 바닥판
         s.m.material.transparent = true
         s.m.material.opacity += (tgt - s.m.material.opacity) * 0.15
         s.e.material.transparent = true
         if (!s.e.material.userData || !s.e.material.userData._ghost)
-          s.e.material.opacity = focusActive ? FOCUS_SOFT_EDGE : (s.m.material.opacity > 0.4 ? 1 : 0)
+          /* 포커스 중 바닥판 테두리는 건물 외곽선과 겹쳐 두 줄로 보이므로 끈다 */
+          s.e.material.opacity = focusActive ? 0 : (s.m.material.opacity > 0.4 ? 1 : 0)
         s.top.material.opacity = Math.min(s.top.material.userData.baseOp, s.m.material.opacity)
       }
       /* 유체 패킷 */
