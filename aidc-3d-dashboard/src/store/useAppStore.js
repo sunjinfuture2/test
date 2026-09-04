@@ -29,9 +29,10 @@ export const useAppStore = create((set) => ({
   filter: 'all',
   setFilter: (filter) => set({ filter }),
 
-  /** 층 필터: all | b1 | f1 | f2 | roof */
+  /** 층 필터: all | b1 | f1 | f2 | roof
+   *  층을 고르면 그 층에 집중하는 것이므로 장비 선택은 함께 해제한다 */
   floor: 'all',
-  setFloor: (floor) => set({ floor }),
+  setFloor: (floor) => set({ floor, selected: null, focusId: null }),
 
   /** Flow 표시 상태 (레퍼런스와 동일한 5계통) */
   flowState: { condensate: true, chilled: true, heat: true, tcs: true, power: true },

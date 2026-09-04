@@ -457,7 +457,7 @@ export default function Viewport() {
     const FOCUS_EDGE_COLOR = new THREE.Color('#a9aeb4') // 선택 외 장비 윤곽선 색
     /* 선택 외 장비(배관 루프 포함) 면 — 아주 연한 파랑으로 칠하고 불투명하게
        둔다. 반투명이면 내부 부속까지 비쳐 형태가 지저분해진다. */
-    const FOCUS_TERM_COLOR = new THREE.Color('#cfdcef')
+    const FOCUS_TERM_COLOR = new THREE.Color('#e6ecf6')
     const FOCUS_TERM_OP = 1        // 불투명 — 내부가 비쳐 보이지 않게
     /* 층 바닥판 — 층이 구분될 정도의 연한 회색 */
     const FOCUS_SLAB_COLOR = new THREE.Color('#c9ced6')
@@ -583,10 +583,16 @@ export default function Viewport() {
           o.material.depthWrite = FOCUS_TERM_OP >= 1
           focusSaved.push(entry)
           return
-        } else if (o.userData.slabMesh) {
-          /* 층 바닥판 — 연한 회색으로 층 경계를 보이게 한다
-             (불투명도는 렌더 루프가 FOCUS_SLAB_OP로 몰아간다) */
+        } else if (o.material.userData && o.material.userData.slabTop) {
+          /* 층 바닥면 — 위에서 내려다볼 때 실제로 보이는 면이라 여기에
+             층 구분 색을 칠한다. 두께 박스(slabMesh)는 이 면과 거의 붙어
+             있어 반투명 정렬이 카메라 각도에 따라 뒤집히며 깜빡이므로
+             렌더 루프에서 아예 지운다 */
           flatten(o.material, FOCUS_SLAB_COLOR)
+          o.material.opacity = FOCUS_SLAB_OP
+        } else if (o.userData.slabMesh) {
+          /* 슬래브 두께 박스 — 상판이 층 구분을 맡으므로 감춘다 */
+          o.material.opacity = 0
         } else {
           /* 벽·지형 등 나머지 구조체 — 램버트 음영을 발광으로 상쇄해
              각도와 무관하게 평평한 흰색이 되게 한다 */
@@ -1145,7 +1151,11 @@ export default function Viewport() {
             refreshSelectedLeader()
           })
         } else {
-          clearXray(); clearSelectionOutline(); restoreFocus(); syncLabels(); refreshSelectedLeader()
+          clearXray(); clearSelectionOutline(); restoreFocus()
+          /* restoreFocus는 포커스가 감췄던 장식물·패킷을 되살리므로,
+             층·계통 필터가 감춰야 할 것까지 다시 보이게 된다. 필터를 다시 건다 */
+          applyVisibility()
+          syncLabels(); refreshSelectedLeader()
         }
       }
       // 재진입(콜백 중 상태 변경) 대비: 스냅샷이 아닌 최신 상태로 prev 갱신
@@ -1203,14 +1213,16 @@ export default function Viewport() {
         else if (isoFloor !== 'all' && s.floor === isoFloor) tgt = 0.97  // 선택 층의 바닥판은 흰 플레이트로
         else if (selZ < s.zTop - 1) tgt = 0.08
         else if (s.floor === 'roof' && sph.pol < 0.62) tgt = 0.1
-        if (focusActive) tgt = FOCUS_SLAB_OP   // 층 구분용 연회색 바닥판
+        if (focusActive) tgt = 0   // 층 구분은 상판이 맡고 두께 박스는 지운다
         s.m.material.transparent = true
         s.m.material.opacity += (tgt - s.m.material.opacity) * 0.15
         s.e.material.transparent = true
         if (!s.e.material.userData || !s.e.material.userData._ghost)
           /* 포커스 중 바닥판 테두리는 건물 외곽선과 겹쳐 두 줄로 보이므로 끈다 */
           s.e.material.opacity = focusActive ? 0 : (s.m.material.opacity > 0.4 ? 1 : 0)
-        s.top.material.opacity = Math.min(s.top.material.userData.baseOp, s.m.material.opacity)
+        s.top.material.opacity = focusActive
+          ? FOCUS_SLAB_OP
+          : Math.min(s.top.material.userData.baseOp, s.m.material.opacity)
       }
       /* 유체 패킷 */
       const tt = (ts || 0) * 0.00010

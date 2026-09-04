@@ -85,11 +85,14 @@ const SHELL_GROUND_OP = 0.08 // 지상면 외곽선 (대지 기준선)
 function buildGhostShells() {
   setFloor(null)
   const g = G(null, null)
-  const bands = { b1: [0, 13.5], f1: [13.5, 27], f2: [27, 40.5], roof: [40.5, 41.7] }
+  /* 옥상은 높이 0 — 파라펫 두께만큼의 직육면체가 아니라 평면 한 줄로 그린다 */
+  const bands = { b1: [0, 13.5], f1: [13.5, 27], f2: [27, 40.5], roof: [40.5, 40.5] }
   for (const f in bands) {
     const z0 = MZS(bands[f][0]), z1 = MZS(bands[f][1])
     for (const r of [MAIN, SUP]) {
-      const geo = new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, r.y1 - r.y0)
+      const geo = z1 > z0
+        ? new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, r.y1 - r.y0)
+        : new THREE.PlaneGeometry(r.x1 - r.x0, r.y1 - r.y0).rotateX(-Math.PI / 2)
       const ls = new THREE.LineSegments(
         new THREE.EdgesGeometry(geo),
         new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: SHELL_OP, depthTest: false, depthWrite: false }),
@@ -127,11 +130,14 @@ function buildGhostShells() {
 function buildEnvelopeLines() {
   setFloor(null)
   const g = G(null, null)
-  const bands = { b1: [0, 13.5], f1: [13.5, 27], f2: [27, 40.5], roof: [40.5, 41.7] }
+  /* 옥상은 높이 0 — 파라펫 두께만큼의 직육면체가 아니라 평면 한 줄로 그린다 */
+  const bands = { b1: [0, 13.5], f1: [13.5, 27], f2: [27, 40.5], roof: [40.5, 40.5] }
   for (const f in bands) {
     const z0 = MZS(bands[f][0]), z1 = MZS(bands[f][1])
     for (const r of [MAIN, SUP]) {
-      const geo = new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, r.y1 - r.y0)
+      const geo = z1 > z0
+        ? new THREE.BoxGeometry(r.x1 - r.x0, z1 - z0, r.y1 - r.y0)
+        : new THREE.PlaneGeometry(r.x1 - r.x0, r.y1 - r.y0).rotateX(-Math.PI / 2)
       const ls = new THREE.LineSegments(
         new THREE.EdgesGeometry(geo),
         new THREE.LineBasicMaterial({ color: new THREE.Color('#9aa0a6'), transparent: true, opacity: 0.7, depthWrite: false }),
@@ -165,6 +171,7 @@ function buildSite() {
   const pitGrad = gradientGroundSurface(g, -32, -26, -1.15, 190, 160, P.groundTop)
   pitGrad.userData.underground = true
   const pitTop = topSurface(g, -14, -10, 0.04, 152, 126, '#E2E5E9')
+  pitTop.material.userData.slabTop = true   // 선택 포커스: 지하층 바닥면도 층 구분 색
   pitTop.userData.underground = true
 
   /* 지형 블록 — 굴토 범위 밖을 GL까지 채움.
