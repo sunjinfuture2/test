@@ -132,7 +132,7 @@ function buildGhostShells() {
    슬래브 상판은 실 마감면과 겹치고 층에 따라 일부만 깔려 있어(예: GIS 상부
    오픈) 흰 구멍이 생기므로, 층 구분은 건물 윤곽과 똑같은 이 한 겹이 맡는다. */
 const FLOOR_PLATE_COLOR = '#d7dce4'
-const FLOOR_PLATE_OP = 0.55
+const FLOOR_PLATE_OP = 0.38
 
 function buildFocusFloors() {
   setFloor(null)
