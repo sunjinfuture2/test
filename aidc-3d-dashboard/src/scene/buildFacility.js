@@ -532,9 +532,9 @@ function buildF1() {
   wall(MAIN.x0, MAIN.y1 - 1.1, z, MAIN.x1 - MAIN.x0, 1.1, XWH, 0, 1, false)
   wall(MAIN.x0, 1.1, z, 1.1, MAIN.y1 - 2.2, XWH, -1, 0, false)
   wall(MAIN.x1 - 1.1, 1.1, z, 1.1, MAIN.y1 - 2.2, XWH, 1, 0, false)
-  wall(43, SUP.y0, z, SUP.x1 - 43, 1.1, XWH, 0, -1, false)             // 공급동 동측 스트립
-  wall(43, SUP.y1 - 1.1, z, SUP.x1 - 43, 1.1, XWH, 0, 1, false)
-  wall(43, SUP.y0 + 1.1, z, 1.1, SUP.y1 - SUP.y0 - 2.2, XWH, -1, 0, false)
+  wall(SUP.x0, SUP.y0, z, SUP.x1 - SUP.x0, 1.1, XWH, 0, -1, false)     // 공급동 외벽 (B1·2층과 동일 범위)
+  wall(SUP.x0, SUP.y1 - 1.1, z, SUP.x1 - SUP.x0, 1.1, XWH, 0, 1, false)
+  wall(SUP.x0, SUP.y0 + 1.1, z, 1.1, SUP.y1 - SUP.y0 - 2.2, XWH, -1, 0, false)
   wall(SUP.x1 - 1.1, SUP.y0 + 1.1, z, 1.1, SUP.y1 - SUP.y0 - 2.2, XWH, 1, 0, false)
   wall(32, MAIN.y1, z, 0.6, SUP.y0 - MAIN.y1, XWH, 0, 0, true)   // 연결부 코리도 벽
   wall(37.9, MAIN.y1, z, 0.6, SUP.y0 - MAIN.y1, XWH, 0, 0, true)
