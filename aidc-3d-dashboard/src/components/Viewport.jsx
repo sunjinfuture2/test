@@ -461,7 +461,7 @@ export default function Viewport() {
     const FOCUS_TERM_OP = 1        // 불투명 — 내부가 비쳐 보이지 않게
     /* 층 바닥판 — 층이 구분될 정도의 연한 회색 */
     const FOCUS_SLAB_COLOR = new THREE.Color('#c9ced6')
-    const FOCUS_SLAB_OP = 0.5
+    const FOCUS_SLAB_OP = 0.62
     const FOCUS_OP = 0.16          // 선택 외 면 불투명도 배율
     const FOCUS_EDGE_OP = 0.5      // 장비 윤곽선 불투명도 (절대값)
     const FOCUS_EXT_EDGE = 0.72    // 건물 외벽 윤곽선 불투명도
@@ -592,6 +592,11 @@ export default function Viewport() {
           o.material.opacity = FOCUS_SLAB_OP
         } else if (o.userData.slabMesh) {
           /* 슬래브 두께 박스 — 상판이 층 구분을 맡으므로 감춘다 */
+          o.material.opacity = 0
+        } else if (o.userData.floorTop) {
+          /* 실 마감 바닥·부지 포장면 — 층 바닥면 바로 위에 흰 면으로 깔려
+             회색을 덮는다. 겹쳐 칠하면 실 안쪽만 진해져 얼룩지므로,
+             층 구분은 바닥면 한 겹에 맡기고 이쪽은 지운다 */
           o.material.opacity = 0
         } else {
           /* 벽·지형 등 나머지 구조체 — 램버트 음영을 발광으로 상쇄해
