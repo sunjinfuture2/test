@@ -43,6 +43,7 @@ export function buildFacility(scene) {
   buildDetailPlus()
   buildGhostShells()
   buildEnvelopeLines()
+  buildFocusFloors()
   buildFlows()
   ctx.floorTerms = collectFloorTerms()
 
@@ -127,6 +128,38 @@ function buildGhostShells() {
    외벽은 두께 1.1m의 박스라 면마다 윤곽선이 생겨 모서리가 서너 줄로 겹쳐
    보인다. 층별 외곽 박스 와이어프레임을 한 겹만 따로 두고, 포커스 중에는
    벽 윤곽선 대신 이것만 켜서 모서리가 한 줄로 떨어지게 한다. */
+/* 건물 층별 바닥판 — 장비 선택 중에만 켜는 층 구분용 연회색 면.
+   슬래브 상판은 실 마감면과 겹치고 층에 따라 일부만 깔려 있어(예: GIS 상부
+   오픈) 흰 구멍이 생기므로, 층 구분은 건물 윤곽과 똑같은 이 한 겹이 맡는다. */
+const FLOOR_PLATE_COLOR = '#d7dce4'
+const FLOOR_PLATE_OP = 0.55
+
+function buildFocusFloors() {
+  setFloor(null)
+  const g = G(null, null)
+  const CONN = { x0: 31.5, x1: 38.5, y0: MAIN.y1, y1: SUP.y0 }
+  for (const f in LV) {
+    for (const r of [MAIN, SUP, CONN]) {
+      const geo = new THREE.PlaneGeometry(r.x1 - r.x0, r.y1 - r.y0).rotateX(-Math.PI / 2)
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+        color: new THREE.Color(FLOOR_PLATE_COLOR), side: THREE.DoubleSide,
+        transparent: true, opacity: FLOOR_PLATE_OP, depthWrite: false,
+      }))
+      m.material.userData = { baseOp: FLOOR_PLATE_OP }
+      /* 슬래브 상단 바로 위 — 바닥에 놓인 장비와 z-파이팅하지 않을 만큼만 */
+      m.position.set(
+        r.x0 + (r.x1 - r.x0) / 2 - CX,
+        MZS(LV[f]) + 0.04,
+        r.y0 + (r.y1 - r.y0) / 2 - CZ,
+      )
+      m.userData.focusFloor = true
+      m.userData.floor = f
+      m.visible = false
+      g.add(m)
+    }
+  }
+}
+
 function buildEnvelopeLines() {
   setFloor(null)
   const g = G(null, null)
@@ -171,7 +204,6 @@ function buildSite() {
   const pitGrad = gradientGroundSurface(g, -32, -26, -1.15, 190, 160, P.groundTop)
   pitGrad.userData.underground = true
   const pitTop = topSurface(g, -14, -10, 0.04, 152, 126, '#E2E5E9')
-  pitTop.material.userData.slabTop = true   // 선택 포커스: 지하층 바닥면도 층 구분 색
   pitTop.userData.underground = true
 
   /* 지형 블록 — 굴토 범위 밖을 GL까지 채움.

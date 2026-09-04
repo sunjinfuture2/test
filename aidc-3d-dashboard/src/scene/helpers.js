@@ -441,8 +441,6 @@ export function slab(x, y, z, w, d, th, floorId, hexBody, hexTop, baseOp) {
   const e = addEdges(g, geo, m, '#969EA6')
   e.userData.structure = true // 층 고스트: 건물 구조 라인만 유지
   const top = topSurface(g, x, y, z + 0.03, w, d, hexTop || '#E8EAEC', Math.min(0.6, op))
-  /* 위에서 내려다보면 실제로 보이는 것은 이 상판이므로, 층 구분 색은 여기에 칠한다 */
-  top.material.userData.slabTop = true
   ctx.slabs.push({ m, e, top, zTop: Z, floor: floorId, baseOp: op })
   return m
 }
