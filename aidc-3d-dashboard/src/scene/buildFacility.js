@@ -132,7 +132,7 @@ function buildGhostShells() {
    슬래브 상판은 실 마감면과 겹치고 층에 따라 일부만 깔려 있어(예: GIS 상부
    오픈) 흰 구멍이 생기므로, 층 구분은 건물 윤곽과 똑같은 이 한 겹이 맡는다. */
 const FLOOR_PLATE_COLOR = '#d7dce4'
-const FLOOR_PLATE_OP = 0.55
+const FLOOR_PLATE_OP = 0.38
 
 function buildFocusFloors() {
   setFloor(null)
@@ -503,7 +503,7 @@ function buildF1() {
   setFloor('f1')
 
   slab(MAIN.x0, MAIN.y0, LV.f1, MAIN.x1 - MAIN.x0, MAIN.y1 - MAIN.y0, 1, 'f1')
-  slab(43, SUP.y0, LV.f1, SUP.x1 - 43, SUP.y1 - SUP.y0, 1, 'f1')     // 공급동 동측 스트립 (GIS 상부 오픈)
+  slab(SUP.x0, SUP.y0, LV.f1, SUP.x1 - SUP.x0, SUP.y1 - SUP.y0, 1, 'f1')  // 공급동 전체 (서측 GIS 상부도 바닥으로 덮음)
   slab(31.5, MAIN.y1, LV.f1, 7, SUP.y0 - MAIN.y1, 1, 'f1')           // 연결부 (공동구 상부 코리도)
 
   const z = LV.f1

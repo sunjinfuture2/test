@@ -457,7 +457,7 @@ export default function Viewport() {
     const FOCUS_EDGE_COLOR = new THREE.Color('#a9aeb4') // 선택 외 장비 윤곽선 색
     /* 선택 외 장비(배관 루프 포함) 면 — 아주 연한 파랑으로 칠하고 불투명하게
        둔다. 반투명이면 내부 부속까지 비쳐 형태가 지저분해진다. */
-    const FOCUS_TERM_COLOR = new THREE.Color('#ebf1f9')
+    const FOCUS_TERM_COLOR = new THREE.Color('#e5edf8')
     const FOCUS_TERM_OP = 1        // 불투명 — 내부가 비쳐 보이지 않게
     /* 층 바닥판 — 층이 구분될 정도의 연한 회색 */
     const FOCUS_OP = 0.16          // 선택 외 면 불투명도 배율
