@@ -539,6 +539,12 @@ export default function Viewport() {
       const keep = groupReg[term]
       const whiteTarget = new THREE.Color('#ffffff')
       scene.traverse((o) => {
+        if (o.userData.groundSurface) {
+          /* 대지 그라데이션 면 — 셰이더 재질이라 아래 색 분기를 타지 않고
+             지하층 높이에 깔린 큰 흰 시트로 남는다. 포커스 중에는 감춘다 */
+          if (o.visible) { o.visible = false; focusHidden.push(o) }
+          return
+        }
         if (!o.material || !o.material.color || o.userData.selectionOutline) return
         /* 건물 외곽선·층 바닥판은 포커스 전용이라 자체 색·불투명도를 지킨다 */
         if (o.userData.envelope || o.userData.focusFloor) return
@@ -587,7 +593,7 @@ export default function Viewport() {
           o.material.depthWrite = FOCUS_TERM_OP >= 1
           focusSaved.push(entry)
           return
-        } else if (o.userData.slabMesh || o.userData.floorTop) {
+        } else if (o.userData.terrain || o.userData.slabMesh || o.userData.floorTop) {
           /* 슬래브 두께 박스·상판, 실 마감 바닥, 부지 포장면 — 층마다 여러 겹이
              겹쳐 있어 각각 칠하면 실 안쪽만 진해지고 정렬이 뒤집히며 깜빡인다.
              층 구분은 건물 윤곽과 똑같은 focusFloor 한 겹이 맡고 이쪽은 지운다 */
@@ -1194,7 +1200,10 @@ export default function Viewport() {
         let tgt = wf.m.userData._dimmed ? 0.06
           : wf.m.userData.terrain ? (isoFloorNow === 'b1' ? 0.12 : 0.5 - 0.42 * terrFace)
           : ((wf.n.dot(camDirH) > 0.18) ? 0.07 : (floorIso ? 0.26 : 0.95))
-        if (focusActive) tgt *= FOCUS_STRUCT_OP
+        /* 지형(흙) 볼륨은 B1~1층에 걸친 큰 반투명 덩어리라, 카메라를 돌리면
+           반투명 정렬이 위층 바닥판보다 뒤로 넘어가며 흰색을 덮어씌운다.
+           포커스 중에는 면을 지우고 윤곽선만 남긴다 */
+        if (focusActive) tgt = wf.m.userData.terrain ? 0 : tgt * FOCUS_STRUCT_OP
         wf.m.material.transparent = true
         wf.m.material.opacity += (tgt - wf.m.material.opacity) * 0.18
         if (!wf.e.material.userData._ghost)
