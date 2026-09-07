@@ -47,9 +47,11 @@ export const useAppStore = create((set) => ({
       return { flowOn: on, flowState }
     }),
 
-  /** 선택된 용어 id (null = 선택 없음) */
+  /** 선택된 용어 id (null = 선택 없음)
+   *  selectTick — 같은 장비를 다시 골라도 휴대폰 시트를 다시 올리기 위한 카운터 */
   selected: null,
-  setSelected: (selected) => set({ selected }),
+  selectTick: 0,
+  setSelected: (selected) => set((s) => ({ selected, selectTick: s.selectTick + 1 })),
 
   /**
    * 사이드바에서 부품을 클릭했을 때: 선택 + 해당 층 전환 + 카메라 줌인.
@@ -60,10 +62,22 @@ export const useAppStore = create((set) => ({
   requestFocus: (id) =>
     set((s) => ({
       selected: id,
+      selectTick: s.selectTick + 1,
       focusId: id,
       focusTick: s.focusTick + 1,
       floor: floorOfTerm(id),
     })),
+
+  /** 화면 크기에 따른 레이아웃 모드
+   *  canvas  — 고정 1908×928 디자인 캔버스를 창에 맞춰 축소 (데스크톱)
+   *  compact — 창을 그대로 채우는 유동 레이아웃 (작은 노트북 · 태블릿)
+   *  phone   — 유동 + 좌측 패널을 하단 시트로 (휴대폰) */
+  layout: 'canvas',
+  setLayout: (layout) => set((s) => (s.layout === layout ? {} : { layout })),
+
+  /** 휴대폰 하단 시트: null(닫힘) | 'detail'(선택 장비 설명) | 'list'(검색·용어 목록) */
+  sheet: null,
+  setSheet: (sheet) => set({ sheet }),
 
   /** 장비 라벨(리더라인 포함) 표시 여부 */
   labelsOn: true,

@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/useAppStore.js'
 import { ctx } from '../scene/helpers.js'
 import { TERMS, CATS, CAT_ORDER, FLOORS } from '../data/terms.js'
+import FloorNav from './FloorNav.jsx'
 
 /**
  * 좌측 학습 패널 — 검색 · 선택 상세 · 계통별 용어 리스트.
@@ -13,15 +14,25 @@ import { TERMS, CATS, CAT_ORDER, FLOORS } from '../data/terms.js'
  */
 export default function Sidebar() {
   const selected = useAppStore((s) => s.selected)
+  const selectTick = useAppStore((s) => s.selectTick)
   const requestFocus = useAppStore((s) => s.requestFocus)
   const query = useAppStore((s) => s.query)
   const setQuery = useAppStore((s) => s.setQuery)
   const floor = useAppStore((s) => s.floor)
   const setFloor = useAppStore((s) => s.setFloor)
+  const layout = useAppStore((s) => s.layout)
+  const sheet = useAppStore((s) => s.sheet)
+  const setSheet = useAppStore((s) => s.setSheet)
   const [collapsed, setCollapsed] = useState({ cooling: true, power: true, it: true, mgmt: true })
   const bodyRef = useRef(null)
   const [fades, setFades] = useState({ top: false, bottom: false })
   const [overflowing, setOverflowing] = useState(false)
+
+  /* 휴대폰: 장비를 고르면 설명 시트를 올리고, 데스크톱으로 돌아가면 시트를 닫는다 */
+  useEffect(() => {
+    if (layout !== 'phone') { setSheet(null); return }
+    if (selected) setSheet('detail')
+  }, [selected, selectTick, layout, setSheet])
 
   const q = query.trim().toLowerCase()
 
@@ -70,7 +81,16 @@ export default function Sidebar() {
   const anyResult = CAT_ORDER.some((cat) => idsFor(cat).length > 0)
 
   return (
-    <aside className="learning-panel">
+    <aside className={`learning-panel${sheet ? ' sheet-' + sheet : ''}`}>
+      {/* 휴대폰 하단 시트 손잡이 — 데스크톱에서는 CSS로 숨긴다 */}
+      <div className="sheet-bar">
+        <button
+          type="button"
+          className="sheet-grip"
+          aria-label="패널 닫기"
+          onClick={() => setSheet(null)}
+        />
+      </div>
       <div className="side-head">
         <span className="search-symbol" aria-hidden="true">
           <svg viewBox="0 0 72 72" focusable="false">
@@ -172,20 +192,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className={`floor-nav${overflowing ? ' divided' : ''}`} aria-label="층 선택">
-        {Object.entries(FLOORS).map(([key, label], i) => (
-          <Fragment key={key}>
-            {i > 0 && <span className="floor-sep" aria-hidden="true" />}
-            <button
-              className={`floor-btn${floor === key ? ' on' : ''}`}
-              aria-pressed={floor === key}
-              onClick={() => setFloor(floor === key ? 'all' : key)}
-            >
-              {label}
-            </button>
-          </Fragment>
-        ))}
-      </nav>
+      <FloorNav className="floor-nav-desk" divided={overflowing} />
 
       <div className={`scroll-edge scroll-edge-top${fades.top ? ' visible' : ''}`} />
       <div className={`scroll-edge scroll-edge-bottom${fades.bottom ? ' visible' : ''}`} />

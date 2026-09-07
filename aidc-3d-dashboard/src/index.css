@@ -279,7 +279,7 @@ button { background: none; border: 0; cursor: pointer; }
 /* ── 뷰포트 · 라벨 · 리더 ── */
 /* 우 7px 이동 (마우스 좌표는 canvas rect 기준이라 transform 안전) */
 .viewport3d { position: relative; flex: 1; min-height: 0; background: #fff; overflow: hidden; transform: translateX(7px); }
-.viewport3d .gl { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.viewport3d .gl { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
 /* 확대 시 가장자리 흰색 그라데이션 소산 — 단층 #gl 마스크와 동일 강도 */
 .viewport3d .gl {
   clip-path: inset(0 0 30px 0);
@@ -606,15 +606,158 @@ button { background: none; border: 0; cursor: pointer; }
   background: linear-gradient(to top, #fff 10%, rgba(255,255,255,0.96) 38%, rgba(255,255,255,0) 100%);
 }
 
-/* 반응형 — 좁은 화면 */
-@media (max-width: 1px) {
-  .wrap { grid-template-columns: 220px minmax(0, 1fr); padding: 0 20px 16px; }
-  .learning-panel { padding-left: 12px; }
-  .top-header { padding: 22px 20px 0 32px; height: 64px; }
-  .toolbar { gap: 12px; }
-  .scroll-edge { left: 12px; }
+/* ============================================================
+   반응형 — 작은 노트북 · 태블릿 · 휴대폰
+   데스크톱(lay-canvas)은 고정 1908×928 캔버스를 축소해 쓰던 방식 그대로다.
+   창이 작아 캔버스를 크게 줄여야 하는 화면에서는 축소 대신 창을 채우고
+   (lay-compact), 휴대폰 폭에서는 좌측 패널을 하단 시트로 내린다(lay-phone).
+   ============================================================ */
+
+/* 시트 손잡이·햄버거는 휴대폰에서만 쓴다 */
+.sheet-bar, .sheet-open, .floor-nav-phone { display: none; }
+
+/* ── 유동 레이아웃 (작은 노트북 · 태블릿) ── */
+.app-shell.lay-compact,
+.app-shell.lay-phone {
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  transform: none;
 }
-@media (max-width: 1px) {
-  .wrap { grid-template-columns: 1fr; }
-  .learning-panel { display: none; }
+.app-shell.lay-compact .top-header {
+  height: auto;
+  padding: 18px 24px 12px;
+  align-items: center;
 }
+.app-shell.lay-compact .h-title h1 { font-size: 18px; }
+.app-shell.lay-compact .wrap {
+  grid-template-columns: 250px minmax(0, 1fr);
+  column-gap: 14px;
+  padding: 0 24px 16px;
+}
+.app-shell.lay-compact .toolbar { gap: 18px; height: 44px; }
+/* 계통 칩만 가로로 밀고, Flow 마스터·라벨·리셋은 오른쪽에 고정한다 */
+.app-shell.lay-compact .filter-nav,
+.app-shell.lay-phone .filter-nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.app-shell.lay-compact .filter-nav::-webkit-scrollbar,
+.app-shell.lay-phone .filter-nav::-webkit-scrollbar { display: none; }
+.app-shell.lay-compact .flow-control,
+.app-shell.lay-phone .flow-control { flex: none; margin-left: 12px; }
+.app-shell.lay-compact .flow-control { gap: 10px; }
+.app-shell.lay-compact .flow-chip { font-size: 11px; }
+.app-shell.lay-compact .learning-panel { width: auto; }
+.app-shell.lay-compact .viewport3d { transform: none; }
+
+/* 가로로 눕힌 휴대폰처럼 높이가 낮으면 머리·툴바를 더 눌러 3D 자리를 넓힌다 */
+@media (max-height: 520px) {
+  .app-shell.lay-compact .top-header { padding: 8px 16px 4px; }
+  .app-shell.lay-compact .h-title h1 { font-size: 15px; }
+  .app-shell.lay-compact .h-meta { display: none; }
+  .app-shell.lay-compact .wrap { grid-template-columns: 196px minmax(0, 1fr); padding: 0 16px 8px; }
+  .app-shell.lay-compact .toolbar { height: 36px; }
+  .app-shell.lay-compact .side-head { height: 40px; }
+  .app-shell.lay-compact .side-body { padding-top: 16px; }
+}
+
+/* 폭이 빠듯하면 Flow 범례는 접는다 — 마스터 토글로 계속 켜고 끌 수 있다 */
+@media (max-width: 1400px) {
+  .app-shell.lay-compact .flow-chip { display: none; }
+}
+
+/* ── 휴대폰 ── */
+.app-shell.lay-phone .top-header {
+  height: auto;
+  padding: 10px 14px 8px 8px;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid #ececee;
+}
+.app-shell.lay-phone .h-title h1 { font-size: 15px; letter-spacing: -0.04em; }
+.app-shell.lay-phone .h-long { display: none; }
+.app-shell.lay-phone .h-meta { display: none; }
+
+.app-shell.lay-phone .sheet-open {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  padding: 0 10px;
+}
+.sheet-open span { display: block; height: 1.5px; background: #101114; border-radius: 1px; }
+
+.app-shell.lay-phone .wrap {
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 0;
+  padding: 0 12px 0;
+}
+.app-shell.lay-phone .toolbar { height: 40px; gap: 8px; }
+.app-shell.lay-phone .filter-nav { gap: 18px; }
+.app-shell.lay-phone .chip { font-size: 13px; }
+.app-shell.lay-phone .flow-chip { display: none; }
+.app-shell.lay-phone .viewport3d { transform: none; }
+.app-shell.lay-phone .scene-copyright { display: none; }
+
+/* 층 내비 — 뷰포트 아래 고정 줄 */
+.app-shell.lay-phone .floor-nav-desk { display: none; }
+.app-shell.lay-phone .floor-nav-phone {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  gap: 0;
+  height: 46px;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid #ececee;
+  background: #fff;
+}
+.app-shell.lay-phone .floor-nav-phone .floor-btn { font-size: 14px; padding: 0 16px; }
+
+/* 하단 시트 — 좌측 패널을 화면 아래에서 끌어올린다 */
+.app-shell.lay-phone .learning-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: auto;
+  max-height: 62vh;
+  padding: 0 16px 14px;
+  background: #fff;
+  border-top: 1px solid #d7d9dd;
+  box-shadow: 0 -10px 28px rgba(16, 17, 20, 0.12);
+  transform: translateY(102%);
+  transition: transform 0.24s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell.lay-phone .learning-panel.sheet-detail,
+.app-shell.lay-phone .learning-panel.sheet-list { transform: none; }
+/* 설명 시트는 목록을, 목록 시트는 설명을 감춰 한 번에 한 가지만 보이게 한다 */
+.app-shell.lay-phone .learning-panel.sheet-detail .list,
+.app-shell.lay-phone .learning-panel.sheet-detail .side-head { display: none; }
+.app-shell.lay-phone .learning-panel.sheet-list .detail { display: none; }
+
+.app-shell.lay-phone .sheet-bar {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  padding: 8px 0 6px;
+}
+.sheet-grip { width: 44px; height: 4px; border-radius: 2px; background: #d0d2d6; }
+
+.app-shell.lay-phone .side-head { flex: none; }
+.app-shell.lay-phone .side-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.app-shell.lay-phone .detail { padding: 0 0 18px 2px; }
+.app-shell.lay-phone .list { top: 0; }
+.app-shell.lay-phone .scroll-edge { display: none; }

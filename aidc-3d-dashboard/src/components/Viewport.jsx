@@ -42,7 +42,11 @@ export default function Viewport() {
     const designScale = () => window.__designScale || 1
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     const applyPixelRatio = () =>
-      renderer.setPixelRatio(Math.min(Math.max((window.devicePixelRatio || 1) * designScale(), 0.75), 2.5))
+      renderer.setPixelRatio(Math.min(
+        Math.max((window.devicePixelRatio || 1) * designScale(), 0.75),
+        /* 휴대폰은 픽셀비율이 3까지 올라가 그리기 부담이 커지므로 2로 묶는다 */
+        window.innerWidth < 900 ? 2 : 2.5,
+      ))
     applyPixelRatio()
     renderer.setClearColor(0xffffff, 1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -54,6 +58,20 @@ export default function Viewport() {
     const target = new THREE.Vector3(-40, 21, -11)
     const sph = { az: -0.62, pol: 1.02, dist: 700 }
     const HOME = { az: -0.62, pol: 1.02, dist: 700, tx: -40, ty: 33, tz: -11 }
+    /* 데스크톱 고정 캔버스에서의 뷰포트 가로세로비(1314×759) — 카메라 거리는
+       이 비율을 기준으로 맞춰져 있다. 그래서 데스크톱에서는 보정이 정확히 1이 되고,
+       휴대폰·태블릿 세로처럼 더 좁아질 때만 조금씩 뒤로 물러난다 */
+    const BASE_ASPECT = 1314 / 759
+    let fitK = 1
+    function aspectFit() {
+      const w = host.clientWidth, h = host.clientHeight
+      if (!w || !h) return 1
+      const a = w / h
+      if (a >= BASE_ASPECT) return 1
+      /* 세로로 길어질수록 조금씩만 물러난다 — 비율대로 곱하면 휴대폰에서
+         건물이 손톱만 해진다. 최대 20%까지만 멀어지게 둔다 */
+      return 1 + Math.min(0.2, (BASE_ASPECT / a - 1) * 0.12)
+    }
 
     function updateCam() {
       const sp = Math.sin(sph.pol), cp = Math.cos(sph.pol)
@@ -151,6 +169,54 @@ export default function Viewport() {
       }, 160)
     }
 
+    /* 라벨 링을 펼칠 자리가 있는지 — 좁거나 낮은 뷰포트면 접는다 */
+    function labelRingOff() {
+      return host.clientWidth < 640 || host.clientHeight < 430
+    }
+    /* 라벨 링에 실제로 몇 개가 들어가는지 — layoutLabels가 쓰는 프레임 공식과 같다.
+       위·아래 줄에 각각 perRow개, 좌·우 열에 각각 perSide개가 한계다 */
+    function labelCapacity() {
+      const w = host.clientWidth, h = host.clientHeight
+      if (!w || !h) return 99
+      const labelW = Math.max(104, Math.min(140, w * 0.105)), labelH = 31
+      const frame = {
+        l: Math.max(18, w * 0.018) + 20,
+        r: w - Math.max(18, w * 0.018) - 20,
+        t: Math.max(16, h * 0.025) + 50,
+        b: h - Math.max(16, h * 0.025) - 40,
+      }
+      const gapX = Math.max(30, w * 0.022), gapY = Math.max(26, h * 0.038)
+      const perRow = Math.max(1, Math.floor((frame.r - frame.l + gapX) / (labelW + gapX)))
+      const usableSideH = frame.b - frame.t - labelH * 2 - gapY * 2
+      const perSide = Math.max(0, Math.floor(usableSideH / (labelH + gapY)) + 1)
+      return perRow * 2 + perSide * 2
+    }
+
+    /* 어떤 라벨을 띄울지 결정.
+       계통·층 필터를 먼저 걸고, 남은 개수가 링에 들어갈 자리보다 많으면
+       뒤쪽을 잘라낸다. 넘치는 만큼 그대로 밀어 넣으면 라벨끼리 겹치고
+       리더선이 서로 엉켜 어느 선이 어느 장비로 가는지 읽을 수 없다.
+       자를 때의 순서는 용어 목록 순서로 고정해, 화면을 돌려도 라벨이
+       나타났다 사라졌다 하지 않게 한다. 선택한 장비는 항상 남긴다.
+       화면이 아주 좁으면 링을 통째로 접고 선택한 하나만 띄운다. */
+    function refreshLabelVisibility() {
+      const { filter, floor, selected } = useAppStore.getState()
+      const ringOff = labelRingOff()
+      const cap = ringOff ? 0 : labelCapacity()
+      let shown = 0
+      let changed = false
+      for (let i = 0; i < labelObjs.length; i++) {
+        const L = labelObjs[i]
+        const cat = TERMS[L.id].cat
+        let hid = (filter !== 'all' && cat !== filter) || (floor !== 'all' && L.floor !== floor)
+        if (!hid && L.id !== selected) {
+          if (shown >= cap) hid = true
+          else shown++
+        }
+        if (L.hidden !== hid) { L.hidden = hid; changed = true }
+      }
+      return changed
+    }
     function layoutLabels(force) {
       if (!useAppStore.getState().labelsOn) return
       if (host.classList.contains('labels-moving')) return
@@ -368,8 +434,34 @@ export default function Viewport() {
         if (performance.now() > optDeadline) break
       }
       const selected = useAppStore.getState().selected
+      /* 자리가 모자라면 최적화가 같은 줄에 라벨을 겹쳐 밀어 넣는다. 겹친 채로
+         두면 글자가 서로를 가리고 리더선이 엉켜 읽히지 않으므로, 이미 놓인
+         라벨과 크게 겹치는 것은 이번 배치에서 접는다. 선택한 장비는 남긴다. */
+      const placed = []
+      for (let z1 = 0; z1 < assigned.length; z1++) {
+        const A = assigned[z1]
+        const box = { l: A.slot.x, r: A.slot.x + labelW, t: A.slot.y, b: A.slot.y + labelH }
+        let clash = false
+        if (A.item.id !== selected) {
+          for (let pi = 0; pi < placed.length; pi++) {
+            const q = placed[pi]
+            const ov = Math.max(0, Math.min(box.r, q.r) - Math.max(box.l, q.l))
+              * Math.max(0, Math.min(box.b, q.b) - Math.max(box.t, q.t))
+            if (ov > labelW * labelH * 0.25) { clash = true; break }
+          }
+        }
+        if (clash) {
+          A.hide = true
+          A.item.div.classList.add('hid')
+          A.item.line.setAttribute('opacity', '0')
+          A.item.dot.setAttribute('opacity', '0')
+        } else {
+          placed.push(box)
+        }
+      }
       for (let z2 = 0; z2 < assigned.length; z2++) {
         const A = assigned[z2], item = A.item, x = A.slot.x, y = A.slot.y
+        if (A.hide) continue
         item.div.style.left = x + 'px'; item.div.style.top = y + 'px'
         const attach = endpoint(A.slot, item), lineX = attach.x, lineY = attach.y
         const hit = selectedOutlinePoint(item, lineX, lineY, w, h)
@@ -962,11 +1054,7 @@ export default function Viewport() {
           o.material.opacity = floor === 'b1' ? 0.14 : base
         }
       })
-      for (let i = 0; i < labelObjs.length; i++) {
-        const L = labelObjs[i]
-        const cat = TERMS[L.id].cat
-        L.hidden = (filter !== 'all' && cat !== filter) || (floor !== 'all' && L.floor !== floor)
-      }
+      refreshLabelVisibility()
       labelsDirty = true
       layoutLabels(true)
       syncLabels()
@@ -1087,16 +1175,97 @@ export default function Viewport() {
       else { hideTip(); canvas.style.cursor = dragMode ? 'grabbing' : 'default' }
     }
     function onClick(e) {
+      /* 터치에서 합성된 click — 탭은 touchend가 이미 처리했다 */
+      if (Date.now() - lastTouchAt < 700) return
       if (dragMoved) { dragMoved = false; return }
       const t = pickAt(e)
       useAppStore.getState().setSelected(t || null)
     }
+
+    /* ── 터치 (휴대폰·태블릿) ──
+       한 손가락 = 회전, 두 손가락 = 핀치 확대·축소 + 이동, 짧게 떼면 = 선택.
+       마우스 이벤트는 터치에서 일부만 합성되어 드래그가 되지 않으므로 따로 받는다. */
+    let touchMode = 0          // 1 = 한 손가락, 2 = 두 손가락
+    let lastTouchAt = 0        // 합성 click 걸러내기용
+    let touchMoved = false
+    let pinchDist = 0
+    const tLast = { x: 0, y: 0 }
+    const midpoint = (t) => ({
+      x: (t[0].clientX + t[1].clientX) / 2,
+      y: (t[0].clientY + t[1].clientY) / 2,
+    })
+    const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+
+    function onTouchStart(e) {
+      camGoal = null
+      hideTip()
+      const t = e.touches
+      touchMoved = false
+      if (t.length === 1) {
+        touchMode = 1
+        tLast.x = t[0].clientX; tLast.y = t[0].clientY
+      } else if (t.length >= 2) {
+        touchMode = 2
+        pinchDist = spread(t)
+        const m = midpoint(t)
+        tLast.x = m.x; tLast.y = m.y
+      }
+    }
+    function onTouchMove(e) {
+      if (!touchMode) return
+      e.preventDefault()          // 페이지 스크롤·브라우저 확대 대신 3D 조작
+      const t = e.touches
+      const s = designScale()
+      if (touchMode === 1 && t.length === 1) {
+        const dx = (t[0].clientX - tLast.x) / s, dy = (t[0].clientY - tLast.y) / s
+        if (Math.abs(dx) + Math.abs(dy) > 2) touchMoved = true
+        tLast.x = t[0].clientX; tLast.y = t[0].clientY
+        sph.az -= dx * 0.0052
+        sph.pol = Math.max(0.06, Math.min(1.54, sph.pol - dy * 0.0042))
+        updateCam()
+      } else if (touchMode === 2 && t.length >= 2) {
+        touchMoved = true
+        const d = spread(t), m = midpoint(t)
+        if (pinchDist > 0 && d > 0) {
+          sph.dist = Math.max(52, Math.min(1400, sph.dist * (pinchDist / d)))
+        }
+        pinchDist = d
+        /* 두 손가락 중심 이동 = 화면 이동 */
+        const dx = (m.x - tLast.x) / s, dy = (m.y - tLast.y) / s
+        tLast.x = m.x; tLast.y = m.y
+        const k = sph.dist * 0.0011
+        const right = new THREE.Vector3().subVectors(camera.position, target).cross(new THREE.Vector3(0, 1, 0)).normalize()
+        target.add(right.multiplyScalar(dx * k)).add(new THREE.Vector3(0, 1, 0).multiplyScalar(dy * k))
+        updateCam()
+      }
+    }
+    function onTouchEnd(e) {
+      lastTouchAt = Date.now()
+      if (e.touches.length === 0) {
+        /* 움직이지 않고 뗐으면 탭 — 그 자리의 장비를 고른다 */
+        if (touchMode === 1 && !touchMoved && e.changedTouches.length) {
+          const ct = e.changedTouches[0]
+          const t = pickAt({ clientX: ct.clientX, clientY: ct.clientY })
+          useAppStore.getState().setSelected(t || null)
+        }
+        touchMode = 0
+      } else if (e.touches.length === 1) {
+        /* 두 손가락 중 하나를 떼면 남은 손가락으로 회전을 이어간다 */
+        touchMode = 1
+        tLast.x = e.touches[0].clientX; tLast.y = e.touches[0].clientY
+      }
+    }
+
     canvas.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
     canvas.addEventListener('contextmenu', (e) => e.preventDefault())
     canvas.addEventListener('wheel', onWheel, { passive: false })
     canvas.addEventListener('click', onClick)
+    canvas.addEventListener('touchstart', onTouchStart, { passive: true })
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false })
+    canvas.addEventListener('touchend', onTouchEnd)
+    canvas.addEventListener('touchcancel', onTouchEnd)
 
     /* ── 스토어 구독 ── */
     // 재마운트(모드 전환) 시 라벨 OFF 상태가 유지된 채 돌아올 수 있으므로
@@ -1123,6 +1292,8 @@ export default function Viewport() {
               dist = THREE.MathUtils.clamp(sphere.radius * 2.8, 95, 300)
             }
           }
+          /* 좁은 화면에서는 같은 거리라도 화면에 담기는 폭이 작아 장비가 잘린다 */
+          dist *= fitK
           camGoal = {
             t: L.anchor.clone(),
             d: dist,
@@ -1133,7 +1304,7 @@ export default function Viewport() {
       }
       if (state.resetTick !== prev.resetTick) {
         camGoal = null   // 진행 중인 포커스 비행 취소
-        sph.az = HOME.az; sph.pol = HOME.pol; sph.dist = HOME.dist
+        sph.az = HOME.az; sph.pol = HOME.pol; sph.dist = HOME.dist * fitK
         target.set(HOME.tx, HOME.ty, HOME.tz)
         updateCam()
       }
@@ -1149,6 +1320,8 @@ export default function Viewport() {
       }
       if (state.selected !== prev.selected) {
         clearHoverOutline() // 선택 아웃라인과 중복 방지
+        /* 좁은 화면에서는 띄우는 라벨이 선택을 따라간다 */
+        if (refreshLabelVisibility()) { labelsDirty = true; layoutLabels(true) }
         if (state.selected) {
           syncLabels()
           refreshSelectedLeader()
@@ -1266,6 +1439,15 @@ export default function Viewport() {
       leadersSvg.setAttribute('viewBox', '0 0 ' + w + ' ' + h)
       selectedLeaderSvg.setAttribute('width', w); selectedLeaderSvg.setAttribute('height', h)
       selectedLeaderSvg.setAttribute('viewBox', '0 0 ' + w + ' ' + h)
+      /* 가로세로비가 바뀌면 잘리지 않도록 카메라 거리를 같은 비율로 옮긴다 */
+      const k = aspectFit()
+      if (Math.abs(k - fitK) > 0.002) {
+        sph.dist = Math.max(52, Math.min(1400, sph.dist * (k / fitK)))
+        fitK = k
+        updateCam()
+      }
+      /* 뷰포트가 좁아지거나 넓어지면 라벨 링을 접거나 다시 편다 */
+      refreshLabelVisibility()
       labelsDirty = true
       markCameraMoving()
     }
@@ -1275,6 +1457,8 @@ export default function Viewport() {
     const onWinResize = () => applyPixelRatio()
     window.addEventListener('resize', onWinResize)
 
+    fitK = aspectFit()
+    sph.dist = HOME.dist * fitK
     resize()
     updateCam()
     applyVisibility()
