@@ -1365,17 +1365,13 @@ export default function Viewport() {
       camDirH.subVectors(camera.position, target); camDirH.y = 0; camDirH.normalize()
       for (let i = 0; i < wallsFade.length; i++) {
         const wf = wallsFade[i]
-        // 지하 1층 뷰에서는 지형 볼륨 전체를 반투명 유리로 (천장처럼 덮이는 것 방지)
-        // 지형 볼륨: 카메라를 향한 면은 투명하게(지하 내부 클리어) —
-        // 임계값 스위치 대신 연속 페이드라 각도 회전 시 팝핑이 없고,
-        // 양면 렌더링 백드롭 덕에 관통 시 흰 쐐기도 생기지 않는다
-        const terrFace = THREE.MathUtils.clamp(wf.n.dot(camDirH) / 0.4, 0, 1)
+        /* 지형(흙) 볼륨의 면은 그리지 않는다. 지하를 둘러싼 굴토 벽으로 보이는데,
+           카메라 각도에 따라 밝기와 잘리는 모양이 제각각이라 지하층 주변이
+           지저분해진다. 지반 높이는 위쪽 지상면과 피트 바닥이 이미 보여준다.
+           지하 1층만 유리처럼 아주 옅게 남겨 층 범위를 알아볼 수 있게 한다 */
         let tgt = wf.m.userData._dimmed ? 0.06
-          : wf.m.userData.terrain ? (isoFloorNow === 'b1' ? 0.12 : 0.22 - 0.14 * terrFace)
+          : wf.m.userData.terrain ? (isoFloorNow === 'b1' ? 0.12 : 0)
           : ((wf.n.dot(camDirH) > 0.18) ? 0.07 : (floorIso ? 0.26 : 0.95))
-        /* 지형(흙) 볼륨은 B1~1층에 걸친 큰 반투명 덩어리라, 카메라를 돌리면
-           반투명 정렬이 위층 바닥판보다 뒤로 넘어가며 흰색을 덮어씌운다.
-           포커스 중에는 면을 지우고 윤곽선만 남긴다 */
         if (focusActive) tgt = wf.m.userData.terrain ? 0 : tgt * FOCUS_STRUCT_OP
         wf.m.material.transparent = true
         wf.m.material.opacity += (tgt - wf.m.material.opacity) * 0.18
