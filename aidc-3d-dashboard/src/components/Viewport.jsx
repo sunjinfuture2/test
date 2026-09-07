@@ -1371,7 +1371,7 @@ export default function Viewport() {
         // 양면 렌더링 백드롭 덕에 관통 시 흰 쐐기도 생기지 않는다
         const terrFace = THREE.MathUtils.clamp(wf.n.dot(camDirH) / 0.4, 0, 1)
         let tgt = wf.m.userData._dimmed ? 0.06
-          : wf.m.userData.terrain ? (isoFloorNow === 'b1' ? 0.12 : 0.5 - 0.42 * terrFace)
+          : wf.m.userData.terrain ? (isoFloorNow === 'b1' ? 0.12 : 0.22 - 0.14 * terrFace)
           : ((wf.n.dot(camDirH) > 0.18) ? 0.07 : (floorIso ? 0.26 : 0.95))
         /* 지형(흙) 볼륨은 B1~1층에 걸친 큰 반투명 덩어리라, 카메라를 돌리면
            반투명 정렬이 위층 바닥판보다 뒤로 넘어가며 흰색을 덮어씌운다.
