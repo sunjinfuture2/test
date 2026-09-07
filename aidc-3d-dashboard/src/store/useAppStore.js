@@ -1,16 +1,4 @@
 import { create } from 'zustand'
-import { LABELS } from '../scene/buildFacility.js'
-import { MZ } from '../scene/helpers.js'
-
-/* 층 판정 임계값 — 매핑 후 좌표(층 피치 20.25m) 기준 */
-const FLOOR_OF_Z = (z) => (z < 18 ? 'b1' : z < 38.25 ? 'f1' : z < 58.5 ? 'f2' : 'roof')
-
-/** 용어의 라벨 앵커 높이로 소속 층 결정 (fws는 전 층 관통 → 전체 유지) */
-function floorOfTerm(id) {
-  if (id === 'fws') return 'all'
-  const entry = LABELS.find((l) => l[0] === id)
-  return entry ? FLOOR_OF_Z(MZ(entry[1][2])) : 'all'
-}
 
 /**
  * Shared state between the React UI (header/toolbar/sidebar) and the
@@ -54,7 +42,8 @@ export const useAppStore = create((set) => ({
   setSelected: (selected) => set((s) => ({ selected, selectTick: s.selectTick + 1 })),
 
   /**
-   * 사이드바에서 부품을 클릭했을 때: 선택 + 해당 층 전환 + 카메라 줌인.
+   * 사이드바에서 부품을 클릭했을 때: 선택 + 카메라 줌인.
+   * 층 필터는 건드리지 않는다 — 층은 아래 층 버튼으로만 바꾼다.
    * (3D 라벨/모델 클릭은 setSelected만 — 카메라는 움직이지 않음)
    */
   focusId: null,
@@ -65,7 +54,6 @@ export const useAppStore = create((set) => ({
       selectTick: s.selectTick + 1,
       focusId: id,
       focusTick: s.focusTick + 1,
-      floor: floorOfTerm(id),
     })),
 
   /** 화면 크기에 따른 레이아웃 모드
