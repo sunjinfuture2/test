@@ -28,6 +28,11 @@ import {
 const MAIN = { x0: 0, x1: 105.3, y0: 0, y1: 38.6 }   // 전산동
 const SUP = { x0: 4.2, x1: 63.9, y0: 54, y1: 104 }    // 공급동
 const LV = { b1: 0, f1: 13.5, f2: 27, roof: 40.5 }
+/* 굴착 구획 — 전산동 · 공급동 · 연결부 · 공급동 서측 유류야드.
+   피트 바닥과 층 바닥판이 같은 범위를 쓴다 */
+const CONN = { x0: 31.5, x1: 38.5, y0: 38.6, y1: 54 }
+const FUEL = { x0: -14, x1: 4.2, y0: 54, y1: 104 }
+const DUG = [MAIN, SUP, CONN, FUEL]
 const WH = 8.7   // 장비 기준 높이 (덕트·팬월 등 배치 좌표에만 사용)
 const XWH = 12.5 // 벽 높이 — 층 피치 13.5 − 슬래브 두께 1: 벽 상단이 천장 슬래브에 밀착
 const GL = 13.5  // 지반 레벨 (= 1층 바닥)
@@ -137,10 +142,6 @@ const FLOOR_PLATE_OP = 0.55
 function buildFocusFloors() {
   setFloor(null)
   const g = G(null, null)
-  const CONN = { x0: 31.5, x1: 38.5, y0: MAIN.y1, y1: SUP.y0 }
-  /* 공급동 서측 유류야드 — 옥외 유류 탱크가 놓인 곳이라 지하·지상층에서는
-     건물 바닥이 여기까지 이어져야 설비가 허공에 뜨지 않는다 */
-  const FUEL = { x0: -14, x1: SUP.x0, y0: SUP.y0, y1: SUP.y1 }
   for (const f in LV) {
     for (const r of (f === 'b1' || f === 'f1' ? [MAIN, SUP, CONN, FUEL] : [MAIN, SUP, CONN])) {
       const geo = new THREE.PlaneGeometry(r.x1 - r.x0, r.y1 - r.y0).rotateX(-Math.PI / 2)
@@ -200,14 +201,19 @@ function buildSite() {
 
   /* 굴토 피트 바닥 — 지하층은 그라데이션 없이 실선으로.
      underground 플래그: 1층 아이솔레이션에서는 지하 요소를 숨긴다 */
-  const pit = box(g, -14, -10, -1.2, 152, 126, 1.2, P.slab, { noedge: true })
-  pit.userData.underground = true
-  const pitEdge = addEdges(g, pit.geometry, pit, '#969EA6')
-  pitEdge.userData.underground = true
+  /* 피트는 실제로 파는 구획만 — 부지 전체에 깔면 건물 밖으로 흰 판이
+     뻗어나와 지하층 뒷벽과 겹쳐 보인다. 부지 바닥면은 아래 그라데이션이 맡는다 */
   const pitGrad = gradientGroundSurface(g, -32, -26, -1.15, 190, 160, P.groundTop)
   pitGrad.userData.underground = true
-  const pitTop = topSurface(g, -14, -10, 0.04, 152, 126, '#E2E5E9')
-  pitTop.userData.underground = true
+  for (const r of DUG) {
+    const w = r.x1 - r.x0, d = r.y1 - r.y0
+    const pit = box(g, r.x0, r.y0, -1.2, w, d, 1.2, P.slab, { noedge: true })
+    pit.userData.underground = true
+    const pitEdge = addEdges(g, pit.geometry, pit, '#969EA6')
+    pitEdge.userData.underground = true
+    const pitTop = topSurface(g, r.x0, r.y0, 0.04, w, d, '#E2E5E9')
+    pitTop.userData.underground = true
+  }
 
   /* 지형 블록 — 굴토 범위 밖을 GL까지 채움.
      E1(전산동) x -1.5~106.8 · y -1.5~40.1
