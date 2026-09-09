@@ -3,6 +3,12 @@ import { useAppStore } from '../store/useAppStore.js'
 
 const MODE_LABEL = { multi: '복층', single: '단층' }
 
+/* 1인칭 워크스루 — 같은 도면을 실측 스케일로 세운 별도 앱(test2 저장소).
+   씬을 통째로 갈아끼우는 대신 링크로 넘긴다. 포인터 락·충돌 격자·전용
+   조명을 쓰는 앱이라 이 대시보드와 한 페이지에 얹으면 서로 방해한다.
+   <a>로 두는 덕에 Ctrl/⌘ 클릭이면 새 탭으로 열린다. */
+const WALK_URL = 'https://sunjinfuture2.github.io/test2/walk/'
+
 export default function Header() {
   const mode = useAppStore((s) => s.mode)
   const setMode = useAppStore((s) => s.setMode)
@@ -57,6 +63,9 @@ export default function Header() {
                     {label}
                   </button>
                 ))}
+                <a className="mode-item mode-link" href={WALK_URL} onClick={() => setOpen(false)}>
+                  내부 둘러보기
+                </a>
               </span>
             )}
           </span>
