@@ -96,6 +96,14 @@ button { background: none; border: 0; cursor: pointer; }
 }
 .mode-item:hover { background: none; color: #55585d; }
 .mode-item.on { color: #0b0c0d; font-weight: 800; border-bottom: 1.25px solid var(--hl); }
+/* 워크스루는 <a>라 button 리셋이 닿지 않는다 — 나머지 항목과 같게 맞춘다 */
+.mode-link {
+  font-family: inherit;
+  line-height: inherit;
+  text-decoration: none;
+  border: 0;
+  cursor: pointer;
+}
 
 /* 단층 모드 — 원본 HTML 전체 화면 구동 */
 .single-frame {
