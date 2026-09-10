@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { buildFacility, LABELS } from '../scene/buildFacility.js'
 import { ctx, LEVELS } from '../scene/helpers.js'
+import { cutDoors, clearBridge } from './access.js'
 
 /**
  * 부감용 다이어그램 씬을 1인칭에서 실내처럼 보이게 바꾼다.
@@ -82,6 +83,12 @@ export function buildWorld(scene) {
   root.name = 'facility'
   scene.add(root)
   buildFacility(root)          // 도면 지오메트리 (스케일 1 = 실측 미터)
+
+  /* 벽에 문을 뚫는다 — 재질 개조보다 먼저 해야 잘라 낸 조각도 함께
+     실내 재질을 받는다 */
+  const cuts = cutDoors(root)
+  const movedOff = clearBridge(root)
+  if (typeof console !== 'undefined' && console.debug) console.debug('문', cuts, '연결통로 정리', movedOff.length)
 
   /* ── 1. 재질 개조 ── */
   root.traverse((o) => {
