@@ -95,6 +95,15 @@ kbd {
   border: 1px solid rgba(255,255,255,0.3);
 }
 .top .help:hover { color: #101114; background: #fff; border-color: #fff; }
+/* 용어사전으로 돌아가기 — <a>라 button 리셋이 닿지 않는다 */
+.top .back {
+  pointer-events: auto;
+  margin-left: 10px; padding: 5px 11px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: -0.02em;
+  color: #101114; background: rgba(255,255,255,0.9); text-decoration: none;
+  white-space: nowrap;
+}
+.top .back:hover { background: #fff; }
 
 /* ── 미니맵 ── */
 .map {
@@ -159,6 +168,7 @@ kbd {
   .panel { max-height: 52vh; padding: 18px 20px 20px; }
   /* 좁은 화면에서는 상단 바가 두 줄로 접히지 않게 감도 숫자와 fps를 뺀다 */
   .top .sens em, .top .fps { display: none; }
+  .top .back { margin-left: auto; }
   /* 미니맵이 설명 패널을 가리므로 반으로 줄여 위로 붙인다 */
   .map { transform: scale(0.62); transform-origin: 100% 0; top: 54px; bottom: auto; }
 }
