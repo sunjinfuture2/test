@@ -33,6 +33,10 @@ export const SPEED_PRESETS = [
 ]
 export const SPRINT_MULT = 2.1
 
+/* 처음 들어오면 질주로 시작한다 — 건물이 워낙 넓어서 보통 걸음으로는
+   첫인상이 "넓다"가 아니라 "안 나아간다"가 된다 */
+export const DEFAULT_SPEED_IDX = 4
+
 /* 한 번에 이 거리 이상은 밀지 않는다 — 벽 두께(약 0.3 m)보다 작게 잡아야
    빠른 속도에서 벽을 통과하지 않는다 */
 const MAX_STEP = 0.12
@@ -56,7 +60,7 @@ export class Controller {
     this.eyeTarget = EYE
     this.eyeCurrent = EYE
 
-    this.walkSpeed = 1.4
+    this.walkSpeed = SPEED_PRESETS[DEFAULT_SPEED_IDX].walk
     this.mouseSensitivity = SENS_DEFAULT
     this.locked = false
     this.enabled = true

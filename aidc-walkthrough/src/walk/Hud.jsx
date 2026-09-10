@@ -1,5 +1,9 @@
 import { SPEED_PRESETS, SENS_DEFAULT } from './Controller.js'
 
+/* 용어사전으로 돌아가는 길. 워크스루는 /walk/, 용어사전은 /3d/에 배포되므로
+   상대 경로로 잇는다 — 절대 URL로 박으면 호스트가 바뀔 때 같이 깨진다 */
+const DICT_URL = '../3d/'
+
 /**
  * 워크스루 HUD — 최소주의.
  *
@@ -72,6 +76,7 @@ export default function Hud({
         </span>
         <span className="fps">{fps} fps</span>
         <button className="help" onClick={onHelp} aria-label="조작 도움말">?</button>
+        <a className="back" href={DICT_URL}>돌아가기</a>
       </div>
 
       {/* 미니맵 — 지금 층 평면과 내 위치·시선 */}

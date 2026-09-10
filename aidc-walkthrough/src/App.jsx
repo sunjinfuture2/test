@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { TERMS, CATS } from './data/terms.js'
 import { buildWorld, updateLights, FLOOR_Y, FLOOR_ORDER, FLOOR_LABEL, SPAWNS, planToWorld } from './walk/buildWorld.js'
 import { CollisionGrid } from './walk/Collision.js'
-import { Controller, SPEED_PRESETS, SENS_DEFAULT } from './walk/Controller.js'
+import { Controller, SPEED_PRESETS, SENS_DEFAULT, DEFAULT_SPEED_IDX } from './walk/Controller.js'
 import { Minimap } from './walk/Minimap.js'
 import Hud from './walk/Hud.jsx'
 
@@ -19,7 +19,7 @@ export default function App() {
      "설명창만 닫으려던" 조작이 시작 화면으로 튕기는 것처럼 느껴진다 */
   const [gateOpen, setGateOpen] = useState(true)
   const [floor, setFloor] = useState('f2')
-  const [speedIdx, setSpeedIdx] = useState(1)
+  const [speedIdx, setSpeedIdx] = useState(DEFAULT_SPEED_IDX)
   const [sens, setSens] = useState(SENS_DEFAULT)
   const [aimed, setAimed] = useState(null)      // 조준된 용어 id
   const [openTerm, setOpenTerm] = useState(null)
