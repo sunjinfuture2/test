@@ -1,0 +1,164 @@
+:root { --ink: #101114; --muted: #8f949b; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+body {
+  font-family: Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  background: #0d1014; color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+button, kbd { font: inherit; color: inherit; }
+button { background: none; border: 0; cursor: pointer; }
+
+.walk-root { position: fixed; inset: 0; }
+.viewport { position: absolute; inset: 0; }
+.viewport .gl { display: block; width: 100%; height: 100%; }
+/* 층 이동 시 짧은 화이트 페이드 */
+.viewport.flash::after {
+  content: ''; position: absolute; inset: 0; background: #fff;
+  animation: flash 0.32s ease-out forwards; pointer-events: none;
+}
+@keyframes flash { from { opacity: 0.85 } to { opacity: 0 } }
+
+.hud { position: absolute; inset: 0; pointer-events: none; }
+.hud button { pointer-events: auto; }
+
+/* ── 시작 오버레이 ── */
+.gate {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(12, 15, 19, 0.62); backdrop-filter: blur(3px); pointer-events: auto;
+}
+.gate-card {
+  position: relative;
+  width: min(520px, calc(100% - 40px)); padding: 34px 36px 30px;
+  background: #fff; border-radius: 2px; box-shadow: 0 24px 70px rgba(0,0,0,0.35);
+}
+.gate-x {
+  position: absolute; top: 12px; right: 14px; width: 28px; height: 28px;
+  font-size: 21px; line-height: 1; color: #9aa0a8;
+}
+.gate-x:hover { color: #101114; }
+.gate-title { font-size: 21px; font-weight: 800; letter-spacing: -0.045em; padding-right: 30px; }
+.gate-sub { font-size: 12.5px; color: var(--muted); margin-top: 5px; letter-spacing: -0.02em; }
+.gate-go {
+  display: block; width: 100%; margin: 22px 0 20px; padding: 13px 0;
+  background: var(--ink); color: #fff; font-size: 14.5px; font-weight: 700;
+  letter-spacing: -0.03em; border-radius: 2px;
+}
+.gate-go:hover { background: #26282d; }
+.gate-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.gate-keys > div { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #4c5057; }
+.gate-keys span { letter-spacing: -0.02em; }
+kbd {
+  display: inline-block; min-width: 20px; padding: 2px 6px; text-align: center;
+  font-size: 10.5px; font-weight: 700; line-height: 1.35; color: #2a2d33;
+  background: #f1f2f4; border: 1px solid #dfe1e5; border-bottom-width: 2px; border-radius: 3px;
+}
+.gate-spawn { margin-top: 20px; padding-top: 16px; border-top: 1px solid #e8e9ec; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gate-spawn-label { font-size: 11px; color: var(--muted); margin-right: 4px; }
+.gate-spawn button {
+  padding: 6px 11px; font-size: 11.5px; letter-spacing: -0.02em;
+  border: 1px solid #dfe1e5; border-radius: 999px; color: #33363c;
+}
+.gate-spawn button:hover { border-color: #9aa0a8; color: #101114; }
+
+/* ── 상단 바 ── */
+.top {
+  position: absolute; top: 0; left: 0; right: 0; height: 46px;
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: linear-gradient(to bottom, rgba(12,15,19,0.5), rgba(12,15,19,0));
+  color: #fff; font-size: 12px; letter-spacing: -0.02em;
+}
+.top .floor { font-size: 15px; font-weight: 800; letter-spacing: -0.04em; }
+.top .sep { width: 1px; height: 13px; background: rgba(255,255,255,0.28); }
+.top .speed { display: flex; gap: 2px; }
+.top .speed button {
+  padding: 4px 9px; font-size: 11.5px; color: rgba(255,255,255,0.6);
+  border-radius: 999px;
+}
+.top .speed button.on { color: #101114; background: rgba(255,255,255,0.9); font-weight: 700; }
+.top .speed button:hover { color: #fff; }
+.top .speed button.on:hover { color: #101114; }
+.top .sens { display: flex; align-items: center; gap: 2px; }
+.top .sens button {
+  width: 20px; height: 20px; font-size: 12px; font-weight: 700;
+  color: rgba(255,255,255,0.6); border-radius: 3px;
+}
+.top .sens button:hover { color: #fff; background: rgba(255,255,255,0.14); }
+.top .sens em {
+  font-style: normal; font-size: 11.5px; color: rgba(255,255,255,0.72);
+  font-variant-numeric: tabular-nums; min-width: 62px; text-align: center;
+}
+.top .fps { margin-left: auto; color: rgba(255,255,255,0.45); font-variant-numeric: tabular-nums; }
+.top .help {
+  width: 22px; height: 22px; margin-left: 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.62);
+  border: 1px solid rgba(255,255,255,0.3);
+}
+.top .help:hover { color: #101114; background: #fff; border-color: #fff; }
+
+/* ── 미니맵 ── */
+.map {
+  position: absolute; right: 16px; bottom: 16px;
+  border: 1px solid rgba(255,255,255,0.5); border-radius: 2px;
+  box-shadow: 0 8px 26px rgba(0,0,0,0.28); overflow: hidden;
+  background: rgba(255,255,255,0.92);
+}
+.map canvas { display: block; }
+.map-floor {
+  position: absolute; top: 5px; left: 7px; font-size: 10.5px; font-weight: 800;
+  letter-spacing: -0.03em; color: #565c64;
+}
+
+/* ── 시선 조작 재개 알약 ── */
+.resume {
+  position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+  padding: 7px 15px; background: rgba(12,15,19,0.72); color: #fff;
+  font-size: 11.5px; letter-spacing: -0.02em; border-radius: 999px;
+}
+
+/* ── 조준 힌트 ── */
+.aim {
+  position: absolute; left: 50%; bottom: 88px; transform: translateX(-50%);
+  padding: 9px 14px 9px 12px; background: rgba(255,255,255,0.93);
+  border-left: 2px solid var(--cat); border-radius: 2px;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.18); text-align: left;
+  animation: aimIn 0.16s ease-out;
+}
+@keyframes aimIn { from { opacity: 0; transform: translate(-50%, 5px) } to { opacity: 1; transform: translate(-50%, 0) } }
+.aim-name { font-size: 14px; font-weight: 800; letter-spacing: -0.04em; }
+.aim-key { font-size: 11px; color: #6a6f76; margin-top: 4px; letter-spacing: -0.02em; }
+
+/* ── 설명 패널 ── */
+.panel {
+  position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+  width: min(680px, calc(100% - 40px)); max-height: 46vh; overflow-y: auto;
+  padding: 22px 26px 24px; background: rgba(255,255,255,0.97);
+  border-top: 3px solid var(--cat); border-radius: 2px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.24); pointer-events: auto;
+  animation: panelIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes panelIn { from { opacity: 0; transform: translate(-50%, 18px) } to { opacity: 1; transform: translate(-50%, 0) } }
+.panel-x {
+  position: absolute; top: 10px; right: 12px; width: 28px; height: 28px;
+  font-size: 20px; line-height: 1; color: #9aa0a8;
+}
+.panel-x:hover { color: #101114; }
+.panel-name { font-size: 19px; font-weight: 800; letter-spacing: -0.045em; }
+.panel-en { font-size: 13px; font-weight: 700; color: #33363c; margin-top: 3px; letter-spacing: -0.025em; }
+.panel-desc { font-size: 13px; line-height: 1.72; letter-spacing: -0.03em; margin-top: 15px; word-break: keep-all; color: #1a1c20; }
+.panel-facts { list-style: none; margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.panel-facts li { position: relative; padding-left: 13px; font-size: 12px; line-height: 1.6; letter-spacing: -0.025em; color: #4c5057; word-break: keep-all; }
+.panel-facts li::before { content: '▸'; position: absolute; left: 0; color: var(--cat); }
+.panel-foot {
+  margin-top: 16px; padding-top: 13px; border-top: 1px solid #ebecef;
+  font-size: 11px; color: #8f949b; letter-spacing: -0.02em;
+}
+
+@media (max-width: 700px) {
+  .gate-keys { grid-template-columns: 1fr; }
+  .panel { max-height: 52vh; padding: 18px 20px 20px; }
+  /* 좁은 화면에서는 상단 바가 두 줄로 접히지 않게 감도 숫자와 fps를 뺀다 */
+  .top .sens em, .top .fps { display: none; }
+  /* 미니맵이 설명 패널을 가리므로 반으로 줄여 위로 붙인다 */
+  .map { transform: scale(0.62); transform-origin: 100% 0; top: 54px; bottom: auto; }
+}
