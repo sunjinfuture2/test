@@ -123,6 +123,10 @@ function createExploreWorld(E, renderer) {
   const batchBox=(f,x,y,h,w,d,hei,mat)=>{const k=f+'/'+mat.uuid+'/'+Math.floor(x/16)+'/'+Math.floor(y/16);if(!batches.has(k))batches.set(k,{f,mat,p:[],n:[],uv:[]});const b=batches.get(k),pa=unit.attributes.position,na=unit.attributes.normal,ua=unit.attributes.uv;
     for(let i=0;i<pa.count;i++){b.p.push(x-72+pa.getX(i)*w,FY[f]+h+pa.getY(i)*hei,y-56+pa.getZ(i)*d);b.n.push(na.getX(i),na.getY(i),na.getZ(i));b.uv.push(ua.getX(i),ua.getY(i));}};
   function tube(f,points,radius,mat,opt={}){for(let i=1;i<points.length;i++){const a=p3(points[i-1][0],points[i-1][1],FY[f]+points[i-1][2]),b=p3(points[i][0],points[i][1],FY[f]+points[i][2]),v=b.clone().sub(a);const m=new T.Mesh(new T.CylinderGeometry(radius,radius,v.length(),16,1),mat);m.position.copy(a).add(b).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),v.normalize());m.userData={floor:f,...opt};groups[f].add(m);}}
+  /* 등기구 행거 — 등이 공중에 뜨지 않도록 바로 위 구조체(슬래브·덕트)에 매단다.
+     여기서는 요청만 모아 두고, 월드가 다 선 뒤에 위로 레이를 쏴서 실제로 건다. */
+  const hangRequests=[];
+  const hang=(f,x,y,top,axis,span)=>hangRequests.push({f,x,y,top,axis,span});
   // A single panel texture keeps thousands of vents crisp without thousands of objects.
   const rackTx=makeTexture(768,1024,(c,w,h)=>{
     c.fillStyle='#131516';c.fillRect(0,0,w,h);
@@ -146,7 +150,7 @@ function createExploreWorld(E, renderer) {
       batchBox('f2',ax+side*1.28,py+.97,.04,1.15,1.9,.08,dark);
     }
     label('f2','AISLE '+String(ai+1).padStart(2,'0')+' / GPU',ax,19.51,2.9,1.5,.24,0,'#b9f4ff');
-    for(const y of [7.7,11.9,16.1]){batchBox('f2',ax,y,3.54,.13,3.15,.055,lamp);batchBox('f2',ax,y,3.6,.21,3.24,.06,metal);}
+    for(const y of [7.7,11.9,16.1]){batchBox('f2',ax,y,3.54,.13,3.15,.055,lamp);batchBox('f2',ax,y,3.6,.21,3.24,.06,metal);hang('f2',ax,y,3.63,'y',3.24);}
     for(const side of [-1,1]){
       tube('f2',[[ax+side*1.1,5.5,3.3],[ax+side*1.1,20.6,3.3]],.055,side<0?teal:orange);
       for(const yy of [6,10.5,15,19]){batchBox('f2',ax+side*1.1,yy,3.3,.2,.08,.18,silver);}
@@ -216,7 +220,7 @@ function createExploreWorld(E, renderer) {
     const sm=new T.MeshBasicMaterial({map:tx,toneMapped:false});const m=new T.Mesh(new T.PlaneGeometry(6.15,3.06),sm);
     const angle=(i-1)*.12;m.position.copy(p3(69.3+i*7.4+Math.sin(angle)*.222,24.4+Math.cos(angle)*.222,FY.f1+2.8));m.rotation.y=angle;m.userData={floor:'f1',aimTerm:'bms'};groups.f1.add(m);pickMeshes.push(m);
     batchBox('f1',69.3+i*7.4,24.65,.59,6.65,.54,.16,metal);
-    batchBox('f1',69.3+i*7.4,24.62,4.88,6.65,.25,.055,lamp);
+    batchBox('f1',69.3+i*7.4,24.62,4.88,6.65,.25,.055,lamp);hang('f1',69.3+i*7.4,24.62,4.908,'x',6.65);
   }
   label('f1','NETWORK OPERATIONS CENTER',79,24.8,5.2,12,.45);
   // Control-room glazing has a real, automatically sliding opening.
@@ -239,14 +243,14 @@ function createExploreWorld(E, renderer) {
   addDoor('f1',82,33.73,4,'x','01 / OPERATIONS');
   addDoor('f1',63.38,76.4,4.4,'z','MAIN ENTRANCE');
   addDoor('f2',97.8,21.8,3,'x','02 / DATA HALL');
-  // Suspended lighting at a human-scaled height; original high loft slabs remain untouched.
+  // Suspended lighting at a human-scaled height, hung from the slab above (see hang()).
   const lightLocations=[];
   for(const f of ['b1','f1','f2']){
     for(let x=9;x<100;x+=10){for(const y of f==='f2'?[21.1,35.6]:[22.8,35.3]){
-      batchBox(f,x,y,4.7,4,.18,.09,white);batchBox(f,x,y,4.64,3.8,.14,.02,lamp);lightLocations.push({f,x,y,h:4.45,color:'#fff4e7',power:34});
+      batchBox(f,x,y,4.7,4,.18,.09,white);batchBox(f,x,y,4.64,3.8,.14,.02,lamp);hang(f,x,y,4.745,'x',4);lightLocations.push({f,x,y,h:4.45,color:'#fff4e7',power:34});
     }}
-    for(let x=13;x<62;x+=11)for(let y=59;y<100;y+=12){batchBox(f,x,y,4.7,3.6,.18,.09,white);batchBox(f,x,y,4.64,3.4,.14,.02,lamp);lightLocations.push({f,x,y,h:4.3,color:'#fff1df',power:44});}
-    for(let y=41;y<54;y+=4){batchBox(f,35.3,y,4.1,2.5,.16,.07,white);lightLocations.push({f,x:35.3,y,h:3.8,color:'#f8f5ef',power:22});}
+    for(let x=13;x<62;x+=11)for(let y=59;y<100;y+=12){batchBox(f,x,y,4.7,3.6,.18,.09,white);batchBox(f,x,y,4.64,3.4,.14,.02,lamp);hang(f,x,y,4.745,'x',3.6);lightLocations.push({f,x,y,h:4.3,color:'#fff1df',power:44});}
+    for(let y=41;y<54;y+=4){batchBox(f,35.3,y,4.1,2.5,.16,.07,white);hang(f,35.3,y,4.135,'x',2.5);lightLocations.push({f,x:35.3,y,h:3.8,color:'#f8f5ef',power:22});}
   }
   for(const ax of aisleXs)for(const y of [8,13,18])lightLocations.push({f:'f2',x:ax,y,h:3.2,color:'#eff4f5',power:18});
   lightLocations.push({f:'f1',x:82,y:28,h:3,color:'#63bbd3',power:22},{f:'f1',x:55,y:76,h:3.4,color:'#ffcfa3',power:45});
@@ -268,6 +272,33 @@ function createExploreWorld(E, renderer) {
   const routeSegments=[['f1',61.2,76.4,61.2,57],['f1',61.2,57,35.3,57],['f1',35.3,57,35.3,35.5],['f1',35.3,35.5,82,35.5],['f1',82,35.5,82,31.5],['f1',85,35.5,100.1,35.5],['f2',97.6,29,97.6,21],['f2',97.6,20.1,31.2,20.1]];
   const routeMat=new T.MeshBasicMaterial({color:'#8caa9e',transparent:true,opacity:.38,toneMapped:false});
   for(const [f,x,y,xx,yy]of routeSegments){const len=Math.hypot(xx-x,yy-y),n=Math.floor(len/1.1);for(let i=0;i<n;i++){const t=(i+.5)/n;const m=box(f,x+(xx-x)*t-.025,y+(yy-y)*t-.18,.12,.05,.36,.008,routeMat,{routeGuide:true});m.rotation.y=Math.atan2(xx-x,yy-y);}}
+  /* 등기구를 바로 위 구조체에 매단다. 위로 레이를 쏴서 먼저 맞는 면(덕트·트레이가
+     있으면 그것, 없으면 층 슬래브 밑면)까지만 행거를 올린다 — 무턱대고 슬래브까지
+     올리면 통로 위 덕트를 행거가 꿰뚫는다. */
+  root.updateMatrixWorld(true);
+  {
+    const CEIL=12.5, upRay=new T.Raycaster(), up=new T.Vector3(0,1,0), org=new T.Vector3();
+    upRay.far=CEIL+.5;
+    for(const g of hangRequests){
+      org.set(g.x-72,FY[g.f]+g.top+.06,g.y-56);upRay.set(org,up);
+      let ceil=null;
+      for(const hit of upRay.intersectObject(root,true)){
+        const d=hit.object.userData;
+        if(!hit.object.visible||d.hideAlways||d.flowPart||d.flowParticle||d.routeGuide)continue;
+        const rel=hit.point.y-FY[g.f];
+        if(rel<g.top+.25)continue;
+        if(rel<=CEIL+.05)ceil=Math.min(rel,CEIL);
+        break;
+      }
+      if(ceil===null)continue;                       // 위에 아무것도 없으면 달지 않는다
+      const drop=ceil-g.top, off=Math.max(.3,g.span*.32);
+      for(const side of [-1,1]){
+        const hx=g.axis==='x'?g.x+side*off:g.x, hy=g.axis==='y'?g.y+side*off:g.y;
+        batchBox(g.f,hx,hy,g.top+drop/2,.045,.045,drop,metal);   // 행거 봉
+        batchBox(g.f,hx,hy,ceil-.04,.2,.2,.08,metal);            // 천장 부착 캐노피
+      }
+    }
+  }
   // Batch the high-frequency details. Each colour/floor costs just one draw call.
   for(const b of batches.values()){
     const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(b.p,3));geo.setAttribute('normal',new T.Float32BufferAttribute(b.n,3));geo.setAttribute('uv',new T.Float32BufferAttribute(b.uv,2));geo.computeBoundingSphere();const m=new T.Mesh(geo,b.mat);m.userData={floor:b.f,visualBatch:true};groups[b.f].add(m);
