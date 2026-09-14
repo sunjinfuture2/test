@@ -1,14 +1,72 @@
 <!doctype html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>AI 데이터센터 내부 둘러보기</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-    <script type="module" crossorigin src="./assets/index-C0-jLJ5l.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BxrfibQw.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark"><title>AIDC / Immersive Explore</title>
+<meta name="description" content="An interactive walk through the supplied multilevel AI data center model. Main entrance, operations center, server hall, and liquid cooling inspection.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+  <script type="module" crossorigin src="./assets/index-CMknfc08.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-p0mYib8w.css">
+</head>
+<body>
+<canvas id="view" aria-label="Interactive three dimensional AI data center" data-engine="three.js r169"></canvas>
+<div class="vignette"></div><div class="filmline top"></div><div class="filmline bottom"></div>
+<div id="loading"><div class="loader"></div><strong>Preparing your walkthrough</strong><span>Building the original multilevel facility</span></div>
+<header class="chrome topbar">
+  <div class="brand"><span class="brandmark"><i></i><i></i><i></i></span><div><strong>AI DATA CENTER</strong><small>SPATIAL EXPLORATION / SUNJIN</small></div><span class="version">02</span></div>
+  <nav aria-label="View controls">
+    <button id="mapToggle" class="navbutton active" title="Floor plan (M)"><span class="icon">▦</span><span>PLAN</span></button>
+    <button id="flow" class="navbutton" title="Coolant flow overlay (F)"><span class="icon">∼</span><span>FLOW</span></button>
+    <button id="cinema" class="navbutton" title="Hide interface (H)"><span class="icon">▭</span><span>CINEMA</span></button>
+    <span class="navdivider"></span>
+    <button id="sound" class="iconbutton" title="Toggle ambient sound" aria-label="Toggle ambient sound" aria-pressed="false">♪</button>
+    <button id="capture" class="iconbutton" title="Save a screenshot" aria-label="Save a screenshot">◎</button>
+    <button id="fullscreen" class="iconbutton" title="Fullscreen" aria-label="Fullscreen">⛶</button>
+    <button id="settingsToggle" class="iconbutton" title="Settings" aria-label="Settings">⚙</button>
+    <button id="help" class="iconbutton" title="Controls and help" aria-label="Controls and help">?</button>
+    <span class="navdivider"></span>
+    <button id="back" class="navbutton" title="용어사전으로 돌아가기" aria-label="용어사전으로 돌아가기"><span class="icon">↩</span><span>돌아가기</span></button>
+  </nav>
+</header>
+<main id="intro">
+  <div class="introline"><span class="statusdot"></span> ENTER THROUGH THE MAIN ENTRANCE</div>
+  <h1>AI Data Center<span>Walk inside.</span></h1>
+  <p class="introdesc">Entrance lobby. Operations center. Upper-level compute hall.<br>Follow the connected interior route and ride the lift.<br>Explore with natural finishes and lighter, adaptive rendering.</p>
+  <div class="introactions"><button id="explore">Start exploring <span>↗</span></button><button id="introTour">Guided walkthrough <span>▷</span></button></div>
+  <div class="introkeys"><span><kbd>W A S D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span><span><kbd>E</kbd> Inspect</span></div>
+  <div class="modelstats"><span><strong>09</strong> original rack aisles</span><span><strong>04</strong> accessible levels</span><span><strong>28</strong> equipment terms</span></div>
+  <p class="disclaimer">Your supplied multilevel layout, with an illustrative interior fit-out and lift connection. Not a construction-certified digital twin. Level 1 starts at your previous speed of 5 m/s; use 1-5 to change pace.</p>
+</main>
+<section id="settings" class="chrome glasscard" hidden="" aria-label="Settings">
+  <div class="cardtitle">EXPERIENCE SETTINGS<span class="statusdot"></span></div>
+  <label>Render quality<select id="quality"><option value="0" selected="">Smooth / adaptive (default)</option><option value="1">Balanced / adaptive</option><option value="2">High / optional floor reflections</option></select></label>
+  <label for="speed">Speed level <output id="speedValue">Level 3 / 10 m/s</output><input id="speed" type="range" min="1" max="5" step="1" value="1"></label>
+  <label>Exposure <output id="exposureValue">1.05</output><input id="exposure" type="range" min="0.55" max="1.9" step="0.01" value="1.05"></label>
+  <label class="checkrow"><input type="checkbox" id="guide"> Show route markers</label>
+  <p>Level 1 = previous 5 m/s. Levels 2-5: 7.5, 10, 12.5 and 15 m/s. The same speed limits apply to free exploration and the guided tour; turns and stops ease down safely.</p><p>Smooth mode limits resolution and adjusts it to your graphics hardware. Floor reflections are optional in High mode. No real-time shadows or post-processing are enabled by default.</p>
+</section>
+<aside id="plan" class="chrome glasscard">
+  <div class="cardtitle">YOUR POSITION <span id="coordinate">X 28.4 / Y 95.6</span></div>
+  <div class="floor-tabs"><button data-floor="b1">B1</button><button data-floor="f1" class="">1F</button><button data-floor="f2" class="selected">2F</button><button data-floor="roof" class="">PH</button></div>
+  <div class="maparea"><canvas id="map" width="300" height="300" aria-label="Floor map and current position"></canvas><span class="north">N ↑</span></div>
+  <div class="planfoot"><span class="statusdot"></span><span id="location">Generator / office wing</span></div>
+  <details><summary>QUICK VIEWS <span>+</span></summary><div class="quickviews"><button data-jump="entrance">Main entrance</button><button data-jump="operations">Operations center</button><button data-jump="servers">GPU server aisle</button><button data-jump="closeup">Rack inspection</button></div></details>
+</aside>
+<div class="chrome floorbadge"><span id="floorValue">2F / DATA HALL</span><i></i><span class="live">REAL-TIME 3D</span><small id="fps">60 FPS</small></div>
+<div class="chrome speed-controls" role="group" aria-label="Movement speed levels"><span>SPEED</span><button data-speed="1" aria-label="Speed level 1, 5 meters per second" aria-pressed="false" class="">1</button><button data-speed="2" aria-label="Speed level 2, 7.5 meters per second" aria-pressed="false">2</button><button data-speed="3" aria-label="Speed level 3, 10 meters per second" aria-pressed="true" class="selected">3</button><button data-speed="4" aria-label="Speed level 4, 12.5 meters per second" aria-pressed="false" class="">4</button><button data-speed="5" aria-label="Speed level 5, 15 meters per second" aria-pressed="false" class="">5</button><output id="speedReadout">10 m/s</output></div>
+<div class="chrome bottom-controls"><span><kbd>W A S D</kbd> MOVE</span><span><kbd>E</kbd> INSPECT / LIFT</span><span><kbd>ESC</kbd> CURSOR</span><button id="tour"><span>▷</span> GUIDED TOUR</button></div>
+<div id="resume" class="chrome hint">Click the scene to look around · drag is also supported</div>
+<div id="aim" class="chrome" hidden=""><span class="targetmark"></span><div><strong id="aimName">유류 저장·이송 설비</strong><small id="aimEn">Fuel Storage &amp; Transfer</small></div><kbd>E</kbd></div>
+<button id="liftPrompt" class="chrome hint" hidden="">E  /  DESCEND TO 1F</button>
+<section id="detail" class="chrome glasscard" hidden="">
+  <button id="closeDetail" class="close" aria-label="Close equipment detail">×</button><span class="eyebrow">EQUIPMENT INSIGHT</span>
+  <h2 id="detailName">비상 발전기</h2><p id="detailEn">Backup Generator</p><p id="detailDesc">상용 전원 상실 시 자동 기동해 데이터센터 전 부하를 담당하는 디젤(또는 가스) 발전기. 기동에서 정격 출력까지 수십 초가 걸리므로 그 공백은 UPS가 메운다. 도면처럼 공급동 발전기실에 병렬 설치되며, 급기(DA)·배기 덕트와 유류탱크실이 함께 배치된다. 현장 연료탱크로 통상 24~72시간 무보급 운전이 가능하도록 설계한다.</p><ul id="detailFacts"><li>자동 기동 + 부하 인수: 수십 초 이내</li><li>연료 저장: 24~72시간 연속운전 기준</li><li>UPS(순간 공백)·축열조(냉각 공백)와 한 세트</li></ul><footer><kbd>E</kbd> CLOSE AND CONTINUE</footer>
+</section>
+<div id="flowNote" class="chrome hint" hidden="">COOLANT FLOW OVERLAY / ILLUSTRATIVE, NOT SENSOR DATA</div>
+<div id="tourProgress" class="chrome" hidden=""><div><span id="tourStage"></span><span>T / EXIT TOUR</span></div><div class="progress-track"><i id="tourBar"></i></div></div>
+<div id="transfer"><div class="liftline"></div><span>VERTICAL TRANSFER</span><strong id="transferText"></strong><small>Exploration lift added to connect the original floor levels.</small></div>
+<div id="toast" role="status" class="">Floor quick view / 2F / DATA HALL</div>
+<div id="touchControls" hidden=""><div id="joystick"><div id="knob" style="transform: translate(0px, 0px);"></div></div><button id="touchUse">E</button></div>
+<div class="corner-note chrome">ORIGINAL FOOTPRINT <i>/</i> OPTIMIZED EXPLORATION</div>
+</body>
 </html>
